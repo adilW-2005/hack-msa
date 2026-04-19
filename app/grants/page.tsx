@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { Landmark, ChevronRight, CreditCard, ScrollText } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
-import { getGrantSummaries } from "@/lib/mock-data";
+import { GrantHealthPill } from "@/components/grants/grant-health-pill";
+import { getGrantSummaries, getGrantHealth } from "@/lib/mock-data";
 import { formatCurrency, formatDate } from "@/lib/format";
 
 export default function GrantsPage() {
@@ -26,6 +27,7 @@ export default function GrantsPage() {
               const daysLeft = Math.ceil(
                 (g.endDate.getTime() - Date.now()) / 86_400_000
               );
+              const health = getGrantHealth(g.id);
               return (
                 <Link
                   key={g.id}
@@ -36,23 +38,25 @@ export default function GrantsPage() {
                     <Landmark size={20} strokeWidth={1.75} className="text-olive-500" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[15px] font-semibold text-[var(--lumen-ink)]">
-                      {g.name}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-[15px] font-semibold text-[var(--lumen-ink)]">
+                        {g.name}
+                      </p>
+                      <GrantHealthPill status={health.status} label={health.label} />
+                    </div>
                     <p className="text-[13px] text-[var(--lumen-ink-muted)] truncate">
                       {g.funder}
                     </p>
-                    <p className="text-[12px] text-[var(--lumen-ink-subtle)] mt-0.5">
+                    <p className="text-[12px] text-[var(--lumen-ink-subtle)] mt-0.5 tabular">
                       {formatDate(g.startDate)} – {formatDate(g.endDate)}
-                      {daysLeft > 0 && (
-                        <span className="ml-2 text-warning-700">
+                      {daysLeft > 0 && daysLeft < 90 && (
+                        <span className="ml-2 text-warning-700 font-medium">
                           {daysLeft}d remaining
                         </span>
                       )}
                     </p>
                   </div>
 
-                  {/* Mini stats */}
                   <div className="flex items-center gap-6 shrink-0">
                     <div className="text-center">
                       <p className="text-[11px] uppercase tracking-[0.04em] text-[var(--lumen-ink-subtle)] mb-0.5">
@@ -81,7 +85,7 @@ export default function GrantsPage() {
                         <span className="text-[12px] tabular text-[var(--lumen-ink-muted)]">
                           {formatCurrency(g.spentAmount, true)} spent
                         </span>
-                        <span className="text-[12px] text-[var(--lumen-ink-subtle)]">
+                        <span className="text-[12px] text-[var(--lumen-ink-subtle)] tabular">
                           {pct}%
                         </span>
                       </div>
@@ -91,7 +95,7 @@ export default function GrantsPage() {
                           style={{ width: `${pct}%` }}
                         />
                       </div>
-                      <p className="text-[11px] text-[var(--lumen-ink-subtle)] mt-1 text-right">
+                      <p className="text-[11px] text-[var(--lumen-ink-subtle)] mt-1 text-right tabular">
                         {formatCurrency(g.remainingAmount, true)} remaining
                       </p>
                     </div>
