@@ -1,12 +1,12 @@
 # Lumen — Hackathon Demo Build Plan
 
-> Programmable spend for nonprofits. Real Stripe virtual cards, real Twilio SMS approvals, everything else seeded or shortcut. The demo is fully functional on the critical path and convincing everywhere else.
+> Programmable spend for nonprofits. Real Stripe virtual cards, real-time approvals via an in-app inbox, everything else seeded or shortcut. The demo is fully functional on the critical path and convincing everywhere else.
 
 ---
 
 ## SECTION 0 — DEMO-FIRST PHILOSOPHY
 
-This is not a product; it is a **convincing, clickable demo** that runs on a real Stripe Issuing test account and a real Twilio number. The rule for every feature:
+This is not a product; it is a **convincing, clickable demo** that runs on a real Stripe Issuing test account. The rule for every feature:
 
 > If it is on the demo path, it is **real**. If it is not on the demo path, it is **seeded, stubbed, or cosmetically faked** — but it always *looks* real on screen.
 
@@ -15,25 +15,25 @@ This is not a product; it is a **convincing, clickable demo** that runs on a rea
 - **Stripe Issuing virtual cards.** Real cardholders, real virtual cards, real card numbers visible via Stripe's ephemeral key flow. Created live during the demo.
 - **Stripe real-time authorizations.** The `issuing_authorization.request` webhook fires for every simulated swipe, our engine decides, we call `approve`/`decline` inside the window. This is the core tech demo.
 - **Stripe-native spending controls.** We set `spending_controls.allowed_categories` and `amount` limits on the card so Stripe itself enforces the basics, and our webhook provides the sophistication on top.
-- **Twilio outbound SMS.** Approval requests really send to a real phone. Demo driver uses their own phone as the approver.
-- **Twilio inbound SMS (YES/NO).** Real reply parsing on the Twilio webhook. This is the "wow" moment; it must work.
+- **In-app approval inbox.** Pending approvals appear live in the approver's inbox (polled every 2s). Approver clicks Approve/Decline; the next swipe succeeds. Presenter opens the inbox on a second device (phone browser or tablet) to dramatize the "approver somewhere else" moment.
 - **Policy-driven decisioning.** A simple but real rules engine — policy stored in DB, evaluated on every webhook.
 
 ### What is FAKE / SHORTCUT (but looks real)
 
 - **Auth & multi-tenancy.** Single hardcoded organization. No signup. A "role switcher" dropdown in the header swaps between Dana (Admin), Marcus (Finance/Approver), Luis (Case Manager). No real sessions, no real passwords — just a cookie with the current user ID.
+- **Out-of-band delivery (SMS / email / push).** Not in the demo. Approvals live entirely in the in-app inbox. If asked: *"SMS, email, and push are delivery adapters — the approval primitive is the pending token in our DB, and we can fan that out to any channel with a 20-line adapter."*
 - **RBAC.** Role checks are UI-level only (hide buttons). No middleware enforcement needed.
 - **Grants and budget lines.** Seeded as static DB rows at boot. Balances computed on the fly by summing transactions for that grant. No ledger service, no hold/capture/release lifecycle — just `total - sum(captured)`.
 - **Policy versioning.** Skipped entirely. Policies are mutable; we never need to migrate existing cards in a demo.
 - **Periodic limits (daily/weekly/monthly).** Skipped. Only per-transaction limit and total limit. Good enough for every demo scenario.
 - **Funder report export.** Not generated dynamically. The "Export PDF" button opens a **pre-designed print-friendly HTML page** populated from live data, and the browser's native "Save as PDF" does the rest. Or we ship a pre-rendered PDF with placeholder fields swapped client-side.
 - **Audit log.** A single `events` table we insert into. The "audit view" is a filtered list page. No cryptographic signatures, no replay engine, no read-model projections.
-- **Voucher delivery to client.** We do *not* actually SMS test-mode card details to a "client." In the demo, Luis sees the voucher card details directly in the case manager UI (via Stripe's ephemeral key flow). If asked, we say "in production, the client receives a secure link."
+- **Voucher delivery to client.** We do *not* send test-mode card details to a "client." In the demo, Luis sees the voucher card details directly in the case manager UI (via Stripe's ephemeral key flow). If asked, we say "in production, the client receives a secure link."
 - **Escalation & timeouts.** No background workers needed. If the approver doesn't respond, the transaction stays declined. Demo driver always responds.
 - **Policy engine sophistication.** Plain imperative code, not a DSL. A function `decide(auth, card, policy, grant)` returns `approve | decline | require_approval` with a reason string.
 - **Real landlord/grocer merchant allowlists.** Stripe test-mode authorizations use merchant descriptors we control via Stripe CLI / test helpers. We *pick* the merchant name at trigger time, so allowlist matching is trivially demonstrable.
 - **Reporting charts.** Simple number cards + a single line/bar chart. No time-series database, no aggregation pipeline. `SELECT ... GROUP BY` on the transactions table.
-- **Background jobs.** None. Everything is synchronous request/response or fires in the Stripe/Twilio webhook handler.
+- **Background jobs.** None. Everything is synchronous request/response or fires in the Stripe webhook / approval handlers.
 - **Policy approval chain / fallback approvers.** One approver per policy. No escalation tree.
 
 ### Demo path we will actually walk through
@@ -42,7 +42,7 @@ This is not a product; it is a **convincing, clickable demo** that runs on a rea
 2. Luis issues a voucher card (live, real Stripe card).
 3. Trigger an authorization at an allowed merchant → **auto-approved** in real time.
 4. Trigger an authorization at a blocked merchant → **auto-declined** with reason.
-5. Trigger an authorization that requires approval → Marcus gets a real text → replies `YES` → retry swipe → approved.
+5. Trigger an authorization that requires approval → presenter picks up a second device (phone/tablet already on the Approvals inbox as Marcus) → a pending row appears → taps **Approve** → retry swipe → approved.
 6. Dana opens the grant dashboard → sees live numbers → clicks "Export Funder Report" → a polished print-friendly page opens.
 
 Everything else in the app is present and clickable but can be lightly populated or read-only.
@@ -51,9 +51,9 @@ Everything else in the app is present and clickable but can be lightly populated
 
 ## SECTION 1 — MINIMAL SYSTEM ARCHITECTURE
 
-### 1.1 One process, one database, two webhooks
+### 1.1 One process, one database, one webhook
 
-The whole thing runs as a **single Next.js app** (App Router) with one Postgres database (Neon or Supabase — free tier). Two inbound webhooks and two outbound APIs are the entire integration surface.
+The whole thing runs as a **single Next.js app** (App Router) with one Postgres database (Neon free tier). One inbound webhook (Stripe) is the entire third-party integration surface.
 
 ```
 ┌────────────────────────────────────────────────────┐
@@ -63,33 +63,32 @@ The whole thing runs as a **single Next.js app** (App Router) with one Postgres 
 │   (UI)                   Approvals / Dashboard     │
 │                                                    │
 │   Route handlers    ──►  /api/stripe/webhook       │
-│                          /api/twilio/webhook       │
-│                          /api/trigger-swipe (demo) │
+│                          /api/approvals/[id]/      │
+│                            {approve,decline}       │
+│                          /api/demo/swipe           │
 │                                                    │
 │   lib/decide.ts     ──►  Policy engine (pure fn)   │
 │   lib/stripe.ts     ──►  Stripe Issuing client     │
-│   lib/twilio.ts     ──►  Twilio Messaging client   │
 │                                                    │
 └──────────────┬─────────────────┬───────────────────┘
                │                 │
                ▼                 ▼
          Postgres (Neon)    Stripe Issuing (test)
-                            Twilio Messaging (trial)
 ```
 
-Webhook URLs are exposed via **ngrok** or **Cloudflare Tunnel** during the demo. No deploy needed unless you want one.
+The Stripe webhook is forwarded to localhost via `stripe listen` during the demo. No ngrok required; no deploy needed unless you want one.
 
 ### 1.2 Core data model (the only tables we need)
 
 Seven tables, all simple:
 
-- **users** — `id`, `name`, `role` (`admin` | `finance` | `case_manager`), `phone` (for Marcus, the approver). Seeded, three rows.
+- **users** — `id`, `name`, `role` (`admin` | `finance` | `case_manager`). Seeded, three rows.
 - **grants** — `id`, `name`, `funder`, `total_amount`, `start_date`, `end_date`. Seeded, 3–4 rows.
 - **policies** — `id`, `name`, `grant_id`, `mcc_allow` (array), `mcc_block` (array), `merchant_allow` (array of substrings), `per_txn_limit`, `total_limit`, `approval_threshold` (nullable), `approver_user_id` (nullable), `single_use` (bool), `window_days`. No versioning.
 - **cardholders** — `id`, `type` (`staff` | `client`), `name`, `stripe_cardholder_id`.
 - **cards** — `id`, `policy_id`, `cardholder_id`, `stripe_card_id`, `issued_by_user_id`, `issued_at`, `status`.
 - **authorizations** — `id`, `stripe_auth_id`, `card_id`, `merchant_name`, `merchant_mcc`, `amount`, `decision` (`approved` | `declined` | `pending_approval`), `reason`, `rule_fired`, `approval_id` (nullable), `decided_at`.
-- **approvals** — `id`, `authorization_id`, `approver_user_id`, `token`, `status` (`pending` | `approved` | `declined`), `sent_at`, `resolved_at`.
+- **approvals** — `id`, `authorization_id`, `card_id`, `approver_user_id`, `status` (`pending` | `approved` | `declined`), `requested_at`, `resolved_at`, `consumed_at` (nullable).
 
 Transactions/captures: we use the `authorizations` table as the source of truth. When Stripe's `issuing_transaction.created` fires, we just mark the authorization as `captured` and store the final amount. No separate table.
 
@@ -113,8 +112,8 @@ Logic, in order:
 4. Grant remaining < amount → `decline`, reason `grant_exhausted`.
 5. MCC in `mcc_block` or not in `mcc_allow` → `decline`, reason `mcc_blocked`.
 6. Merchant name doesn't match any `merchant_allow` substring → `decline`, reason `merchant_not_allowed`.
-7. Amount ≥ policy.approval_threshold and there is a pending-approval token for this card already approved in the last 10 minutes → `approve`, reason `approved_via_sms`.
-8. Amount ≥ policy.approval_threshold → `require_approval`, reason `needs_sms_approval`.
+7. Amount ≥ policy.approval_threshold and there is an `approvals` row for this card with `status = approved` and `resolved_at` within the last 10 minutes (and not yet consumed) → `approve`, reason `approved_by_approver`. Mark that approval row as consumed.
+8. Amount ≥ policy.approval_threshold → `require_approval`, reason `needs_approval`.
 9. Otherwise → `approve`, reason `within_policy`.
 
 That's the whole engine. 40 lines of code.
@@ -124,14 +123,15 @@ That's the whole engine. 40 lines of code.
 Because we don't want to hold the Stripe authorization open waiting on a human, we use the simplest reliable pattern:
 
 1. Engine returns `require_approval`.
-2. We call Stripe **decline** with reason `verification_failed` and metadata `{lumen_reason: "needs_sms_approval", approval_id: "..."}`.
-3. We insert a row in `approvals` with a short random `token` and status `pending`.
-4. We send Twilio SMS to the policy's approver:
-   > "Lumen: $320 at Discount Tire on card ••4291 (Program Ops). Reply YES to approve or NO to decline."
-5. Twilio inbound webhook receives `YES`. We match to the pending approval by the sender's phone + most recent pending approval for that approver. Mark as `approved`.
-6. Demo driver re-triggers the same swipe. New `issuing_authorization.request` fires. Engine checks step 7 of the decision logic, finds an approved token within the last 10 minutes for that card, **approves**, and marks the approval consumed.
+2. We call Stripe **decline** with reason `verification_failed` and metadata `{lumen_reason: "needs_approval", approval_id: "..."}`.
+3. We insert a row in `approvals` with `status: pending`, linked to the `card_id` and `authorization_id`, assigned to the policy's approver.
+4. The Approvals inbox page (server-polled every 2s, or SWR with a 2s interval) shows the new pending row with Approve / Decline buttons.
+5. Approver clicks **Approve** → `POST /api/approvals/[id]/approve` flips the row to `status: approved`, sets `resolved_at: now()`.
+6. Demo driver re-triggers the same swipe. New `issuing_authorization.request` fires. Engine checks step 7 of the decision logic, finds an approved row within the last 10 minutes for that card, **approves**, and marks the approval row consumed (a `consumed_at` timestamp, or a boolean — either is fine).
 
-No background jobs, no polling, no escalation. Matches the "hey retry the card" experience people already expect.
+No background jobs, no external services, no escalation. Matches the "hey retry the card" experience people already expect.
+
+> Why not show SMS/push in the demo? The delivery channel is a swappable adapter — we could fan this pending row out to SMS, email, Slack, or push in ~20 lines. The load-bearing primitive is the pending approval row, and that is what we're demoing.
 
 ### 1.5 Triggering authorizations for the demo
 
@@ -151,106 +151,225 @@ This is the **single most important shortcut**: instead of a physical terminal o
 - **UI**: Tailwind + shadcn/ui components. Pre-built cards, tables, dialogs, and forms, so we spend zero time on CSS.
 - **Charts**: Recharts, one chart total.
 - **Stripe**: `stripe` Node SDK, Issuing enabled in test mode.
-- **Twilio**: `twilio` Node SDK, trial account + one verified number (approver's phone gets verified in trial).
-- **Webhook tunneling**: Stripe CLI for local Stripe webhook forwarding; ngrok for Twilio's inbound SMS webhook.
-- **Hosting (if deployed)**: Vercel. If not deployed, laptop + ngrok is fine for the demo.
+- **Webhook tunneling**: Stripe CLI for local Stripe webhook forwarding. That's it.
+- **Hosting (if deployed)**: Vercel. If not deployed, laptop + Stripe CLI is fine for the demo.
 - **Auth**: none. Just a cookie `lumen_user_id` set by the role switcher, read in a server helper.
 
 No state management library, no queue, no Redis, no background worker, no search, no email. If the demo doesn't need it, it is not in the stack.
 
 ---
 
-## SECTION 2 — PHASED BUILD PLAN (SIZED IN HOURS)
+## SECTION 2 — PARALLEL BUILD PLAN FOR 3 PEOPLE
 
-Three tight phases that fit inside a hackathon weekend. Total budget: **~20 hours of focused work** for a team of 2–3. The demo is fully functional at the end of Phase 2; Phase 3 is polish + storytelling.
+This plan is intentionally split into **three decoupled workstreams** so three people can build in parallel without constantly waiting on each other. Everyone works in the same Next.js repo, but each person owns a mostly independent surface with a narrow contract.
 
-### PHASE 1 — THE HOT PATH (6–8 hours)
+### 2.1 The rule: decouple by contract, not by page
 
-**Goal:** end-to-end real transaction decisioning. You can issue a real Stripe virtual card, trigger a real authorization, and see it approved or declined by our engine.
+Each workstream gets:
 
-#### Built
+- a small set of routes/components it owns,
+- a small set of DB tables or queries it is allowed to depend on,
+- one or two integration points with the other tracks,
+- a fallback seeded mode so the UI can progress before the live backend is finished.
 
-- Next.js project bootstrapped, Tailwind + shadcn installed.
-- Postgres schema created (7 tables). Seed script inserts:
-  - 3 users (Dana, Marcus with a real phone number, Luis).
-  - 3 grants with reasonable totals.
-  - 2 policies: *Community Grocery Voucher* (MCC 5411 only, $175 cap) and *Van & Field Ops* (MCC fuel + auto parts + office supplies, $500 cap).
-- Role switcher dropdown in the header (no auth).
-- Stripe Issuing client wired up. `createCardholder` and `createCard` helpers.
-- **Issuance page** — pick a policy, pick/create a cardholder, click Issue. Real Stripe card created, shown in the UI with last4, exp, and a "Reveal full card details" action (Stripe ephemeral key flow on-demand — fine to build in Phase 2; for now show last4 only).
-- **Stripe webhook handler** at `/api/stripe/webhook`. Signature verification. Handles `issuing_authorization.request` synchronously: loads card + policy + grant, runs `decide()`, calls `approve` or `decline` on Stripe, writes an `authorizations` row.
-- **Demo swipe endpoint** `/api/demo/swipe` that hits Stripe test helpers. Three preset buttons on the dashboard: allowed, blocked, over-limit.
-- **Transactions list page** — shows every authorization with card, merchant, MCC, amount, decision, reason. Auto-refreshes every 2 seconds (simple polling).
-- Stripe CLI running locally to forward webhooks.
+The point is not to avoid integration entirely. The point is to make sure each person can be productive for 6–8 hours **without being blocked** by the other two.
 
-#### Not built (yet)
+### 2.2 The three workstreams
 
-- No Twilio. No SMS. No approvals. Anything that would require approval is declined with reason `needs_sms_approval` as a placeholder.
-- No grant dashboard. No reporting.
-- No card reveal (show last4 only — Stripe ephemeral key flow lands in Phase 2).
-- No policy creation UI — policies are seeded. Admin only sees a list.
-- No voucher-specific flow — same issuance UI for staff and voucher.
+#### Workstream A — Card + auth engine
 
-#### What you can actually do at end of Phase 1
+**Owner:** the most backend-comfortable person.
 
-Dana can open the app, see the two seeded policies, click *Issue Card* on the Grocery policy for cardholder "Client R-4412," and get a real Stripe card. You click *Swipe at Safeway* — within a second the transactions list shows **APPROVED** with reason `within_policy`. You click *Swipe at liquor store* — it shows **DECLINED** with reason `mcc_blocked`. You click *Swipe $500 at Discount Tire* on the Ops card — **DECLINED** with reason `needs_sms_approval` (placeholder; Phase 2 makes this real).
+**Owns**
 
-The demo already tells a story at this point. Phase 2 makes it sing.
+- Stripe client helpers in `lib/stripe.ts`
+- Policy engine in `lib/decide.ts`
+- DB schema + seed data
+- `/api/stripe/webhook`
+- `/api/demo/swipe`
+- Card issuance mutations
+- Approval-row creation / consumption logic
 
-### PHASE 2 — APPROVALS + POLICIES + VOUCHERS (6–8 hours)
+**Delivers**
 
-**Goal:** the full demo path works. Real SMS round-trip, policy creation UI, voucher flow, card details reveal.
+- Real cardholder + card creation in Stripe test mode
+- Real authorization handling in under a second
+- `authorizations` rows written correctly
+- `approvals` rows created on `require_approval`
+- Approved-row reuse on retry
 
-#### Built
+**Can work independently because**
 
-- **Twilio integration**: outbound SMS on `require_approval`, inbound webhook at `/api/twilio/webhook` that parses `YES`/`NO` and resolves the matching pending approval.
-- Decision logic step 7 goes live: if an approved token exists for this card in the last 10 minutes, auto-approve on retry.
-- **Approvals inbox page** (for Marcus) — pending approvals with approve/decline buttons. Same logic as SMS, different surface. (Takes 30 minutes, makes the demo feel complete.)
-- **Policy Studio** — form to create/edit policies with all fields. Policies persist; the seeded ones appear as existing rows. This is now a demoable "create a policy live" beat.
-- **Voucher flow** — when issuing a card on a policy flagged as voucher-style (a single boolean on the policy), the card reveal page shows the Stripe PAN/CVC/exp via ephemeral key. Nothing is actually SMS'd to a client; Luis sees the card details and we narrate "in production this is delivered via secure link to the client."
-- **Card reveal**: Stripe ephemeral key flow implemented once, reused for staff and voucher cards.
-- **Expanded swipe simulator**: add a "custom swipe" form (amount / merchant / MCC) so the presenter can handle any audience Q&A.
-- **Better transactions list**: filters by card, by policy, by decision. Click a row → modal with full authorization detail + approval chain (if any).
-- **Role-gated UI**: Dana sees Policy Studio, Luis sees Issuance only, Marcus sees the Approvals inbox and nothing else. Pure UI gating — no middleware.
+- The UI people can stub against seeded `cards`, `authorizations`, and `approvals` rows before Stripe is fully wired.
+- This owner does not need final styling or polished screens to prove the hot path works; Postman, curl, or a temporary admin page is enough.
 
-#### Not built
+#### Workstream B — Operations app UI
 
-- No policy versioning. Editing a policy just updates it.
-- No escalation / timeouts on approvals.
-- No grant balance math yet. The "remaining" number on the grant card is computed naively but the grant page itself is still minimal.
-- No export. No audit log viewer.
-- No client-side voucher delivery. No physical cards. No ACH. No accounting sync.
+**Owner:** the strongest product/frontend person.
 
-#### How it feels
+**Owns**
 
-The demo path is now 100% real and 100% working. A presenter can create a policy live, issue a card live, trigger real Stripe authorizations, and one of those authorizations really sends a text to a phone on stage that really gets replied to and really causes the next swipe to succeed. Nothing is mocked on the critical path.
+- App shell and navigation
+- Role switcher
+- Policy Studio
+- Issue Card flow
+- Approvals inbox
+- Transactions list/detail modal
+- Swipe simulator UI
+- Mobile-friendly approval screen for second-device demoing
 
-### PHASE 3 — GRANTS, REPORTING, AND POLISH (4–6 hours)
+**Delivers**
 
-**Goal:** the product *looks* like a mature platform. Dashboards, grant pages, a polished "funder report" export, and UI polish everywhere.
+- All demo-path screens are clickable and legible
+- Dana / Marcus / Luis role-gated views
+- Approver can tap Approve / Decline on a phone
+- Presenter can trigger a swipe from the UI without touching CLI
 
-#### Built
+**Can work independently because**
 
-- **Grant page** for each seeded grant: total, spent (computed as `SUM(authorizations.amount WHERE decision = approved AND grant_id = X)`), remaining, a list of every policy drawing from it, a list of every authorization, a single bar chart of spend by policy. No ledger service; just SQL aggregations.
-- **Grant-remaining guard in the engine**: step 4 of `decide()` now reads the live sum and declines if grant is exhausted. Demonstrate this by setting a small grant total in seed data and exhausting it live on stage.
-- **Executive dashboard**: landing page for Admin role. Total deployed across all grants, pending approvals count, flagged declines count, recent activity feed. All from simple aggregations.
-- **Flagged Transactions view**: filter of the transactions list showing only declines + pending approvals with their reasons. This is Priya / Marcus's accountability view.
-- **Funder report export**: a dedicated print-friendly page at `/grants/[id]/report` with a clean letterhead-style layout — grant metadata, totals, transactions table, approval summary, notes section. A "Download PDF" button that triggers `window.print()` to PDF. Done. This looks dramatically better than building a PDF generator.
-- **Audit view**: one page that lists every policy edit, card issuance, approval decision, and authorization with timestamps + actor. Read-only. Pure DB query.
-- **UI polish pass**: empty states, loading states, subtle animations on decision outcomes (a green flash on approve, red on decline), formatted currency everywhere, human-readable reason codes (`mcc_blocked` → "This purchase category isn't allowed by the card's policy.").
-- **Seed data expansion**: a couple dozen "historical" authorizations spread over the last 30 days so the dashboard isn't empty when opened. Mix of approvals and declines across the seeded grants.
+- This owner can start from mock JSON / seeded DB rows and ship all major surfaces before the real webhook behavior is done.
+- The only hard contract needed from Workstream A is the shape of the records and endpoints.
 
-#### Not built (and explicitly not promised in the demo)
+#### Workstream C — Grants, reporting, and story layer
 
-- No real accounting integration. If asked: "QuickBooks sync is on the roadmap."
-- No physical cards. If asked: "Virtual-first is intentional for this market; physical is the logical next card type."
-- No multi-org / fiscal sponsor hierarchy.
-- No real ledger / double-entry. The architecture doc acknowledges this as the Phase-4 upgrade.
-- No outcome tracking, no receipt capture, no donor portal.
+**Owner:** the person strongest at polish, analytics, and demo narrative.
 
-#### How it feels
+**Owns**
 
-Complete. Every click lands on a page that looks populated and intentional. The numbers on the dashboard match the numbers on the grant page match the numbers on the funder report. A judge or investor clicking around finds no dead ends, and the demo path still runs end-to-end real.
+- Executive dashboard
+- Grant detail page
+- Funder report page
+- Audit/activity view
+- Historical seed data
+- Copy polish, reason-label mapping, and presentational consistency
+
+**Delivers**
+
+- The app looks complete outside the hot path
+- Dashboard numbers reconcile with transactions
+- Grant page and report page feel investor-ready
+- Historical activity makes the product feel lived-in on first open
+
+**Can work independently because**
+
+- This owner only needs stable read models: `authorizations`, `approvals`, `policies`, `grants`, `cards`.
+- Before live data is ready, seeded historical data is enough to build the entire reporting surface.
+
+### 2.3 Shared contracts between workstreams
+
+This is the thin layer everyone agrees on before writing much code.
+
+#### Contract 1 — Database shape
+
+These tables are the source of truth for all three tracks:
+
+- `users`
+- `grants`
+- `policies`
+- `cardholders`
+- `cards`
+- `authorizations`
+- `approvals`
+
+Workstream A may change the schema early, but after the first seed script lands, table names and key columns should stabilize quickly so Workstreams B and C are not churned by DB drift.
+
+#### Contract 2 — Endpoint surface
+
+Workstream B and C only need these endpoints to exist:
+
+- `POST /api/demo/swipe`
+- `POST /api/approvals/[id]/approve`
+- `POST /api/approvals/[id]/decline`
+- `POST /api/issue-card` (or a server action that does the same thing)
+- `GET /api/transactions`
+- `GET /api/approvals`
+- `GET /api/dashboard`
+- `GET /api/grants/[id]`
+
+These can return mocked/seeded data at first, then become real without forcing UI rewrites.
+
+#### Contract 3 — Core record shapes
+
+The UI should assume these minimal fields exist:
+
+- **Transaction row:** `id`, `merchant_name`, `merchant_mcc`, `amount`, `decision`, `reason`, `card_id`, `policy_name`, `cardholder_name`, `decided_at`
+- **Approval row:** `id`, `amount`, `merchant_name`, `card_last4`, `cardholder_name`, `policy_name`, `status`, `requested_at`
+- **Grant summary:** `id`, `name`, `funder`, `total_amount`, `spent_amount`, `remaining_amount`
+
+If those shapes stay stable, frontend and reporting work can move fast even while the backend is still getting real.
+
+### 2.4 What each person should build first
+
+#### Person A — start with the hot path
+
+Build in this order:
+
+1. DB schema + seed script
+2. Stripe client helpers
+3. `decide()`
+4. `/api/stripe/webhook`
+5. `/api/demo/swipe`
+6. Card issuance mutation
+7. Approval-row creation + consume-on-retry
+
+**Definition of done:** a real Stripe test card can be issued, a simulated swipe can be triggered, and the webhook writes the right decision to the DB.
+
+#### Person B — start with the demo surfaces
+
+Build in this order:
+
+1. App shell + role switcher
+2. Transactions list
+3. Issue Card page
+4. Approvals inbox
+5. Swipe simulator panel
+6. Policy Studio
+7. Transaction detail modal
+
+**Definition of done:** every hot-path action in the demo can be triggered from the UI, even if the data is initially seeded.
+
+#### Person C — start with the “looks like a product” layer
+
+Build in this order:
+
+1. Seed historical data set
+2. Executive dashboard
+3. Grant detail page
+4. Funder report page
+5. Audit/activity view
+6. Copy pass + empty states + formatting polish
+
+**Definition of done:** a judge can click around beyond the demo path and the product still feels coherent and populated.
+
+### 2.5 Integration order so nobody blocks
+
+The merge sequence should be:
+
+1. **Morning / first checkpoint:** agree on schema, endpoint names, and seed data shape.
+2. **Then split:** A works on Stripe + webhook, B works on UI against mocked data, C works on dashboard/reporting against seeded data.
+3. **Second checkpoint:** A lands real DB writes for `authorizations` and `approvals`; B swaps the inbox and transactions pages from mock data to real queries.
+4. **Third checkpoint:** C points dashboard/report pages at the real aggregations once the tables are stable.
+5. **Final polish pass:** everyone fixes copy, formatting, and demo-state rough edges together.
+
+This way the only truly load-bearing dependency is that Workstream A eventually writes the right rows. Everything else can be scaffolded before that.
+
+### 2.6 Fallback plan if one workstream slips
+
+- If **Workstream A** slips: keep the UI demoable with seeded transaction rows and a fake Approve button, but keep Stripe card issuance real if at all possible.
+- If **Workstream B** slips: demo the backend using a thin admin page plus the transactions table; do not block on beautiful UI.
+- If **Workstream C** slips: keep the grant dashboard and report page mostly static; this hurts polish, not the core pitch.
+
+This is the real reason to split the work this way: only one workstream is truly mission-critical, one is demo-critical, and one is polish-critical.
+
+### 2.7 What “done enough” looks like by the end
+
+If the three streams all land their minimums, the final demo looks like this:
+
+- Person A made the money movement real.
+- Person B made the operator workflow real.
+- Person C made the product feel complete.
+
+That is enough to win a hackathon. The architecture reads intentional, the demo path is real, and the rest of the product looks believable.
 
 ---
 
@@ -276,7 +395,7 @@ A single 60-second sequence on stage:
 
 1. Swipe at Safeway → approved in real time, ledger ticks.
 2. Swipe at liquor store → declined instantly with a clear reason.
-3. Swipe $320 at Discount Tire → the presenter's phone buzzes in their hand with a real SMS → presenter replies `YES` on stage → swipe retried → approved → grant number ticks down.
+3. Swipe above the approval threshold → the pending approval appears on the finance lead's phone in the inbox → presenter taps **Approve** → swipe retried → approved → grant number ticks down.
 
 Three authorizations, three different outcomes, all real, all driven by a policy that was either seeded or created moments ago on screen. That sequence *is* the pitch.
 
@@ -284,15 +403,14 @@ Three authorizations, three different outcomes, all real, all driven by a policy
 
 ## SECTION 4 — DEMO SCRIPT
 
-> Target length: 5–7 minutes. Everything in this script runs on a real Stripe Issuing test account and real Twilio trial account. Presenter keeps a phone in hand the entire time.
+> Target length: 5–7 minutes. Everything in this script runs on a real Stripe Issuing test account. Presenter keeps a phone in hand the entire time — opened to the Approvals inbox as Marcus.
 
 ### Pre-demo checklist (10 minutes before)
 
 - Laptop connected to projector. App running at `localhost:3000`.
 - Stripe CLI forwarding webhooks: `stripe listen --forward-to localhost:3000/api/stripe/webhook`.
-- ngrok tunnel up for Twilio inbound: `ngrok http 3000`, Twilio number's SMS webhook pointed at the ngrok URL.
-- Presenter's phone is the approver phone seeded in the DB. Signal is good.
-- Role switcher starts on **Dana (Admin)**.
+- Presenter's phone is on the same network (or on a Vercel preview URL), browser open to `/approvals`, role switcher set to **Marcus**.
+- Laptop role switcher starts on **Dana (Admin)**.
 - Seeded historical data is present so the dashboard looks lived-in.
 
 ### Beat 1 — The problem (20 seconds, no clicks)
@@ -345,21 +463,23 @@ Transactions list shows: **DECLINED — merchant category not allowed by policy*
 
 > "That decline happened at Stripe's network edge in under a second, because the policy told the card what it's for."
 
-### Beat 6 — Approval by SMS — *the centerpiece* (60 seconds)
+### Beat 6 — Approval by the finance lead — *the centerpiece* (60 seconds)
 
 Click **"$1,400 at Coastal Property Mgmt"** on the rent voucher.
 
-Transactions list shows: **HELD — awaiting SMS approval**. Presenter's phone buzzes *audibly on stage*. Hold the phone up to the camera:
+Transactions list on the laptop shows: **HELD — awaiting approval**.
 
-> "Lumen: $1,400 rent payment at Coastal Property Mgmt on card ••7823. Reply YES to approve or NO to decline."
+> "That $1,400 is above the approval threshold Dana set. The card held — and Marcus, our finance lead, needs to sign off."
 
-Reply **YES**. Approvals inbox in the UI refreshes — the pending approval flips to **approved**.
+Presenter picks up their phone and tilts the screen toward the camera. Within two seconds, the Approvals inbox has a new row at the top: merchant, amount, card, cardholder, policy. The row has a subtle clay accent bar on the left.
 
-> "Now watch — the case manager retries the swipe."
+Tap **Approve**. The row animates out.
 
-Click **"Retry last swipe"**. Transactions list flips to **APPROVED — approved via SMS**. The grant balance ticks down.
+> "Now the case manager retries the swipe."
 
-> "Every piece of that — the hold, the text, the reply, the retry — is real. No simulations."
+Back on the laptop, click **"Retry last swipe"**. Transactions list flips to **APPROVED — approved by approver**. The grant balance ticks down.
+
+> "Every piece of that — the hold, the pending approval appearing in real time on a separate device, the tap, the retry — is real. The delivery channel is a pluggable adapter: SMS, push, email, Slack all go through the same pending-approval primitive. We're showing the load-bearing part."
 
 ### Beat 7 — Grant view and funder report (45 seconds)
 
@@ -396,6 +516,7 @@ One-page reference for every "wait, do we actually need to build that?" question
 | Background jobs | None. Everything synchronous. |
 | Ledger / double-entry | `SUM(approved authorizations)` on demand. |
 | Voucher delivery to client | Show in UI, narrate "production delivers via secure link." |
+| Out-of-band approval delivery (SMS / push / email) | In-app inbox only. Narrate "delivery channel is a pluggable adapter; the primitive is the pending approval row." |
 | Stripe Connect / real Issuing account approval | Use test mode. No Connect, no onboarding. |
 | Physical cards | Not in demo. Narrate as "logical next step." |
 | Accounting sync | Not in demo. Narrate as "roadmap." |
@@ -403,16 +524,16 @@ One-page reference for every "wait, do we actually need to build that?" question
 | Multi-approver / approver hierarchies | One approver per policy. |
 | Webhook signature verification in local dev | Use `stripe listen`'s forwarded signing secret; skip strict verification in dev if it blocks progress (but keep it for the real webhook at deploy time). |
 | Unit tests | A few tests only for `decide()`. Everything else manual. |
-| Deployment | Optional. Laptop + ngrok is a valid demo stance. |
+| Deployment | Optional. Laptop + Stripe CLI is a valid demo stance. |
 
 ### The only things that must actually work
 
 - `/api/stripe/webhook` processes `issuing_authorization.request` and responds with approve/decline in under a second.
-- `/api/twilio/webhook` receives a `YES`/`NO` SMS and resolves the matching pending approval.
 - `/api/demo/swipe` hits Stripe test helpers to trigger authorizations.
+- `/api/approvals/[id]/approve` and `/api/approvals/[id]/decline` update pending approvals from the inbox.
 - `decide()` returns correct decisions for the six scenarios in the demo script.
 - Real Stripe virtual cards are created during the demo.
-- Real outbound SMS reaches the presenter's phone.
+- Pending approvals appear on the approver's second device within a couple seconds.
 - The dashboard's numbers match reality after each swipe.
 
 Everything else is allowed to be imperfect, sparse, or pretty-but-static. The demo path is the only path that is load-bearing.
