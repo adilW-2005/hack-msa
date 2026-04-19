@@ -1,24 +1,80 @@
-/** Format cents → "$1,400.00" or "$1,400" */
-export function formatCurrency(cents: number, compact = false): string {
-  const dollars = cents / 100;
-  if (compact) {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(dollars);
-  }
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(dollars);
+import type {
+  ApprovalStatus,
+  DecisionStatus,
+  UserRole,
+} from "@/lib/types";
+
+/**
+ * Formatting helpers.
+ *
+ * Conventions match Person B's `lib/format.ts` so merging is a straight
+ * union: amounts are whole dollars, dates are ISO strings.
+ */
+
+const currencyFormatter = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 0,
+});
+
+const currencyFormatterPrecise = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+const dateTimeFormatter = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+});
+
+const dateFormatter = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+});
+
+const dateFormatterLong = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
+
+/** Format a dollar amount. `precise=true` keeps the cents component. */
+export function formatCurrency(value: number, precise = false): string {
+  return precise
+    ? currencyFormatterPrecise.format(value)
+    : currencyFormatter.format(value);
 }
 
-/** Relative time for last 24h, absolute beyond */
-export function formatTime(date: Date): string {
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
+/** Compact currency for tight labels: $1.4K / $85K / $200K. */
+export function formatCurrencyCompact(value: number): string {
+  const abs = Math.abs(value);
+  const sign = value < 0 ? "-" : "";
+  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000) return `${sign}$${Math.round(abs / 1_000)}K`;
+  return `${sign}$${Math.round(abs)}`;
+}
+
+export function formatDate(value: string | Date): string {
+  return dateFormatter.format(typeof value === "string" ? new Date(value) : value);
+}
+
+export function formatDateLong(value: string | Date): string {
+  return dateFormatterLong.format(typeof value === "string" ? new Date(value) : value);
+}
+
+export function formatDateTime(value: string | Date): string {
+  return dateTimeFormatter.format(typeof value === "string" ? new Date(value) : value);
+}
+
+/** Relative time for the last ~24h, absolute beyond. */
+export function formatTime(value: string | Date): string {
+  const date = typeof value === "string" ? new Date(value) : value;
+  const now = Date.now();
+  const diffMs = now - date.getTime();
   const diffMins = Math.floor(diffMs / 60_000);
   const diffHours = Math.floor(diffMs / 3_600_000);
 
@@ -26,20 +82,21 @@ export function formatTime(date: Date): string {
   if (diffMins < 60) return `${diffMins} min ago`;
   if (diffHours < 24) return `${diffHours}h ago`;
 
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  return dateTimeFormatter.format(date);
 }
 
-export function formatDate(date: Date): string {
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+/** Signed relative time ("in 3 hours" / "2 days ago") for deadlines. */
+export function formatRelativeTime(value: string | Date): string {
+  const date = typeof value === "string" ? new Date(value).getTime() : value.getTime();
+  const now = Date.now();
+  const diffMinutes = Math.round((date - now) / 60_000);
+  const formatter = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+
+  if (Math.abs(diffMinutes) < 60) return formatter.format(diffMinutes, "minute");
+  const diffHours = Math.round(diffMinutes / 60);
+  if (Math.abs(diffHours) < 24) return formatter.format(diffHours, "hour");
+  const diffDays = Math.round(diffHours / 24);
+  return formatter.format(diffDays, "day");
 }
 
 export function formatPercent(value: number, total: number): string {
@@ -47,26 +104,58 @@ export function formatPercent(value: number, total: number): string {
   return `${Math.round((value / total) * 100)}%`;
 }
 
-/** Human-readable reason codes */
-const REASON_LABELS: Record<string, string> = {
-  within_policy: "Within policy",
-  approved_by_approver: "Approved by approver",
+/** Human-readable decision reason codes. */
+export const REASON_LABELS: Record<string, string> = {
+  within_policy: "Within policy and under the approval threshold.",
+  approved_by_approver: "Approved by approver; retry cleared.",
+  needs_approval: "Waiting for approval.",
   mcc_blocked: "This category isn't allowed on this card.",
   merchant_not_allowed: "This merchant isn't on the card's allowlist.",
   over_per_txn_limit: "Amount is above the per-transaction limit.",
   over_card_total: "Card's total limit has been reached.",
   grant_exhausted: "The funding grant has no remaining budget.",
-  needs_approval: "Waiting for approval.",
   card_expired: "Card is past its active window.",
+  card_inactive: "Card is inactive and cannot authorize new spend.",
+  single_use_consumed: "This single-use card already completed a swipe.",
 };
 
-export function reasonLabel(code: string): string {
-  return REASON_LABELS[code] ?? code;
+export function getReasonLabel(code: string): string {
+  return REASON_LABELS[code] ?? code.replaceAll("_", " ");
 }
 
-/** MCC → human label */
+/** Back-compat alias; prefer `getReasonLabel`. */
+export const reasonLabel = getReasonLabel;
+
+export const DECISION_LABELS: Record<DecisionStatus, string> = {
+  approved: "Approved",
+  declined: "Declined",
+  pending_approval: "Pending approval",
+};
+
+export const APPROVAL_LABELS: Record<ApprovalStatus, string> = {
+  pending: "Pending",
+  approved: "Approved",
+  declined: "Declined",
+};
+
+export const ROLE_TITLES: Record<UserRole, string> = {
+  admin: "Admin",
+  finance: "Finance lead",
+  case_manager: "Case manager",
+};
+
+/** Landing route per role, used by `app/page.tsx` redirect. */
+export const ROLE_HOME: Record<UserRole, string> = {
+  admin: "/dashboard",
+  finance: "/dashboard",
+  case_manager: "/dashboard",
+};
+
+/** MCC → human label. */
 const MCC_LABELS: Record<string, string> = {
   "5411": "Grocery Stores",
+  "5499": "Specialty Food Stores",
+  "5541": "Service Stations",
   "5912": "Drug Stores",
   "5921": "Liquor Stores",
   "6513": "Real Estate / Rent",
@@ -80,4 +169,8 @@ const MCC_LABELS: Record<string, string> = {
 
 export function mccLabel(code: string): string {
   return MCC_LABELS[code] ?? `MCC ${code}`;
+}
+
+export function formatAmountLabel(amount: number, mcc: string): string {
+  return `${formatCurrency(amount)} • MCC ${mcc}`;
 }

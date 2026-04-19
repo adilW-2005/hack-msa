@@ -118,7 +118,7 @@ export function BurnRateChart({ data, totalAmount }: Props) {
           tickLine={false}
         />
         <YAxis
-          tickFormatter={(v: number) => formatCurrency(v, true)}
+          tickFormatter={(v: number) => formatCurrency(v)}
           tick={{ fontSize: 11, fill: "#5B5B57" }}
           axisLine={false}
           tickLine={false}
@@ -133,7 +133,7 @@ export function BurnRateChart({ data, totalAmount }: Props) {
           stroke="#D3D0C5"
           strokeDasharray="4 4"
           label={{
-            value: `Budget ${formatCurrency(totalAmount, true)}`,
+            value: `Budget ${formatCurrency(totalAmount)}`,
             position: "insideTopRight",
             fill: "#5B5B57",
             fontSize: 11,

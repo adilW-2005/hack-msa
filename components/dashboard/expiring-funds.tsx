@@ -9,7 +9,7 @@ interface ExpiringFund {
   daysLeft: number;
   remaining: number;
   projectedUnspent: number;
-  endDate: Date;
+  endDate: string;
 }
 
 interface Props {
@@ -63,11 +63,11 @@ export function ExpiringFundsCard({ items }: Props) {
                     {f.daysLeft} {f.daysLeft === 1 ? "day" : "days"} left
                   </span>
                   <span className="text-[var(--lumen-ink-subtle)]">·</span>
-                  <span className="tabular">{formatCurrency(f.remaining, true)} remaining</span>
+                  <span className="tabular">{formatCurrency(f.remaining)} remaining</span>
                 </p>
-                {f.projectedUnspent > 500000 && (
+                {f.projectedUnspent > 5_000 && (
                   <p className="text-[11px] text-clay-700 mt-1 font-medium">
-                    Projected to return ~{formatCurrency(f.projectedUnspent, true)} unspent
+                    Projected to return ~{formatCurrency(f.projectedUnspent)} unspent
                   </p>
                 )}
               </div>

@@ -13,8 +13,8 @@ interface TransactionDetail {
   approver?: { name: string } | null;
   approval?: {
     id: string;
-    requestedAt: Date;
-    resolvedAt: Date | null;
+    requestedAt: string;
+    resolvedAt: string | null;
     status: string;
   } | null;
   policy?: {

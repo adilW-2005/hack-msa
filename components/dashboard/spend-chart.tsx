@@ -75,7 +75,7 @@ export function SpendChart({ data }: SpendChartProps) {
           tickLine={false}
         />
         <YAxis
-          tickFormatter={(v: number) => formatCurrency(v, true)}
+          tickFormatter={(v: number) => formatCurrency(v)}
           tick={{ fontSize: 12, fill: "#5B5B57" }}
           axisLine={false}
           tickLine={false}

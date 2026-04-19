@@ -27,7 +27,7 @@ function Tip({ active, payload }: { active?: boolean; payload?: TipPayload[] }) 
         {formatCurrency(item.value)}
       </p>
       <p className="text-[11px] text-[var(--lumen-ink-muted)] tabular">
-        {pct}% of {formatCurrency(budget, true)} budget
+        {pct}% of {formatCurrency(budget)} budget
       </p>
     </div>
   );
@@ -70,7 +70,7 @@ export function PolicyBreakdownDonut({ data }: Props) {
             Deployed
           </span>
           <span className="text-[20px] font-semibold tabular tracking-[-0.02em] text-[var(--lumen-ink)]">
-            {formatCurrency(total, true)}
+            {formatCurrency(total)}
           </span>
         </div>
       </div>
@@ -89,7 +89,7 @@ export function PolicyBreakdownDonut({ data }: Props) {
                 {d.name}
               </span>
               <span className="tabular font-medium text-[var(--lumen-ink)] shrink-0">
-                {formatCurrency(d.spent, true)}
+                {formatCurrency(d.spent)}
               </span>
               <span className="tabular text-[11px] text-[var(--lumen-ink-subtle)] shrink-0 w-9 text-right">
                 {pct}%

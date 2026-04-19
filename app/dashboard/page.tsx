@@ -68,14 +68,14 @@ export default function DashboardPage() {
           <StatCard
             hero
             label="Deployed this month"
-            value={formatCurrency(stats.deployedThisMonth, true)}
+            value={formatCurrency(stats.deployedThisMonth)}
             delta="across all grants"
             icon={<DollarSign size={18} className="text-olive-100" strokeWidth={1.75} />}
           />
           <StatCard
             label="Beneficiaries served"
             value={String(impact.beneficiariesServed)}
-            delta={`${formatCurrency(impact.avgPerBeneficiary, true)} avg / person`}
+            delta={`${formatCurrency(impact.avgPerBeneficiary)} avg / person`}
             deltaPositive
             icon={<Users size={18} className="text-[var(--lumen-ink-muted)]" strokeWidth={1.75} />}
           />
@@ -193,8 +193,8 @@ export default function DashboardPage() {
                   <div className="text-right shrink-0 w-48">
                     <div className="flex items-center justify-end gap-2 mb-1">
                       <span className="text-[13px] tabular text-[var(--lumen-ink-muted)]">
-                        {formatCurrency(g.spentAmount, true)} /{" "}
-                        {formatCurrency(g.totalAmount, true)}
+                        {formatCurrency(g.spentAmount)} /{" "}
+                        {formatCurrency(g.totalAmount)}
                       </span>
                       <span className="text-[12px] text-[var(--lumen-ink-subtle)]">{pct}%</span>
                     </div>

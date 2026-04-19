@@ -39,7 +39,9 @@ export default function AuditPage() {
         status: a.status as "approved" | "declined",
         grantName: a.grantName,
       })),
-  ].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+  ].sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+  );
 
   return (
     <div className="flex flex-col flex-1">

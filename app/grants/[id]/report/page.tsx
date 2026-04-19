@@ -95,20 +95,20 @@ export default async function FunderReportPage({ params }: Props) {
             <div className="bg-white rounded-[16px] border border-[var(--lumen-border)] p-5 text-center">
               <p className="text-[11px] uppercase tracking-[0.04em] text-[var(--lumen-ink-subtle)] mb-2">Total Budget</p>
               <p className="text-[24px] font-semibold tabular tracking-[-0.02em] text-[var(--lumen-ink)]">
-                {formatCurrency(grant.totalAmount, true)}
+                {formatCurrency(grant.totalAmount)}
               </p>
             </div>
             <div className="bg-white rounded-[16px] border border-[var(--lumen-border)] p-5 text-center">
               <p className="text-[11px] uppercase tracking-[0.04em] text-[var(--lumen-ink-subtle)] mb-2">Deployed</p>
               <p className="text-[24px] font-semibold tabular tracking-[-0.02em] text-success-700">
-                {formatCurrency(spentAmount, true)}
+                {formatCurrency(spentAmount)}
               </p>
               <p className="text-[12px] text-[var(--lumen-ink-subtle)] mt-1">{pct}% of budget</p>
             </div>
             <div className="bg-olive-50 rounded-[16px] border border-olive-100 p-5 text-center">
               <p className="text-[11px] uppercase tracking-[0.04em] text-olive-700/70 mb-2">Remaining</p>
               <p className="text-[24px] font-semibold tabular tracking-[-0.02em] text-olive-700">
-                {formatCurrency(remainingAmount, true)}
+                {formatCurrency(remainingAmount)}
               </p>
             </div>
           </div>

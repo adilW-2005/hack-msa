@@ -25,7 +25,7 @@ export default function GrantsPage() {
                 Math.round((g.spentAmount / g.totalAmount) * 100)
               );
               const daysLeft = Math.ceil(
-                (g.endDate.getTime() - Date.now()) / 86_400_000
+                (new Date(g.endDate).getTime() - Date.now()) / 86_400_000,
               );
               const health = getGrantHealth(g.id);
               return (
@@ -83,7 +83,7 @@ export default function GrantsPage() {
                     <div className="w-48">
                       <div className="flex items-center justify-between mb-1.5">
                         <span className="text-[12px] tabular text-[var(--lumen-ink-muted)]">
-                          {formatCurrency(g.spentAmount, true)} spent
+                          {formatCurrency(g.spentAmount)} spent
                         </span>
                         <span className="text-[12px] text-[var(--lumen-ink-subtle)] tabular">
                           {pct}%
@@ -96,7 +96,7 @@ export default function GrantsPage() {
                         />
                       </div>
                       <p className="text-[11px] text-[var(--lumen-ink-subtle)] mt-1 text-right tabular">
-                        {formatCurrency(g.remainingAmount, true)} remaining
+                        {formatCurrency(g.remainingAmount)} remaining
                       </p>
                     </div>
                   </div>

@@ -31,7 +31,9 @@ export default async function GrantDetailPage({ params }: Props) {
   const details = buildTransactionDetails(transactions);
 
   const pct = Math.min(100, Math.round((spentAmount / grant.totalAmount) * 100));
-  const daysLeft = Math.ceil((grant.endDate.getTime() - Date.now()) / 86_400_000);
+  const daysLeft = Math.ceil(
+    (new Date(grant.endDate).getTime() - Date.now()) / 86_400_000,
+  );
   const paceBehind = pacing.pacePercent < 0;
 
   return (
@@ -72,7 +74,7 @@ export default async function GrantDetailPage({ params }: Props) {
                 Total
               </p>
               <p className="text-[28px] font-semibold tabular tracking-[-0.02em] text-[var(--lumen-ink)]">
-                {formatCurrency(grant.totalAmount, true)}
+                {formatCurrency(grant.totalAmount)}
               </p>
             </div>
             <div className="text-center p-4 bg-[var(--lumen-surface)] rounded-xl">
@@ -80,7 +82,7 @@ export default async function GrantDetailPage({ params }: Props) {
                 Spent
               </p>
               <p className="text-[28px] font-semibold tabular tracking-[-0.02em] text-[var(--lumen-ink)]">
-                {formatCurrency(spentAmount, true)}
+                {formatCurrency(spentAmount)}
               </p>
             </div>
             <div className="text-center p-4 bg-olive-50 rounded-xl border border-olive-100">
@@ -88,7 +90,7 @@ export default async function GrantDetailPage({ params }: Props) {
                 Remaining
               </p>
               <p className="text-[28px] font-semibold tabular tracking-[-0.02em] text-olive-700">
-                {formatCurrency(remainingAmount, true)}
+                {formatCurrency(remainingAmount)}
               </p>
             </div>
           </div>
@@ -192,7 +194,7 @@ export default async function GrantDetailPage({ params }: Props) {
                     Projected deploy
                   </p>
                   <p className="text-[15px] font-semibold tabular text-[var(--lumen-ink)]">
-                    {formatCurrency(pacing.projectedFinal, true)}
+                    {formatCurrency(pacing.projectedFinal)}
                   </p>
                   <p
                     className={`text-[11px] mt-0.5 tabular ${
@@ -202,9 +204,9 @@ export default async function GrantDetailPage({ params }: Props) {
                     }`}
                   >
                     {pacing.projectedUnderspend > 0
-                      ? `${formatCurrency(pacing.projectedUnderspend, true)} under`
+                      ? `${formatCurrency(pacing.projectedUnderspend)} under`
                       : pacing.projectedUnderspend < 0
-                      ? `${formatCurrency(Math.abs(pacing.projectedUnderspend), true)} over`
+                      ? `${formatCurrency(Math.abs(pacing.projectedUnderspend))} over`
                       : "On target"}
                   </p>
                 </div>
@@ -213,10 +215,10 @@ export default async function GrantDetailPage({ params }: Props) {
                     Ideal to date
                   </p>
                   <p className="text-[15px] font-semibold tabular text-[var(--lumen-ink)]">
-                    {formatCurrency(pacing.idealSpentToDate, true)}
+                    {formatCurrency(pacing.idealSpentToDate)}
                   </p>
                   <p className="text-[11px] text-[var(--lumen-ink-subtle)] mt-0.5 tabular">
-                    Actual: {formatCurrency(pacing.spent, true)}
+                    Actual: {formatCurrency(pacing.spent)}
                   </p>
                 </div>
               </div>
@@ -269,10 +271,10 @@ export default async function GrantDetailPage({ params }: Props) {
                   </div>
                   <div className="flex items-center justify-between text-[12px] mb-1">
                     <span className="tabular text-[var(--lumen-ink-muted)]">
-                      {formatCurrency(p.spentAmount, true)}
+                      {formatCurrency(p.spentAmount)}
                     </span>
                     <span className="text-[var(--lumen-ink-subtle)]">
-                      / {formatCurrency(p.totalLimit, true)}
+                      / {formatCurrency(p.totalLimit)}
                     </span>
                   </div>
                   <div className="h-1.5 bg-[var(--lumen-surface-sunken)] rounded-full overflow-hidden">

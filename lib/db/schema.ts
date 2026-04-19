@@ -8,11 +8,17 @@ import {
 } from "drizzle-orm/pg-core";
 
 // ─── Users ───────────────────────────────────────────────────────
+//
+// Note on units: amounts are stored in cents (Stripe convention), but the
+// runtime shape exposed by `lib/types.ts` uses whole dollars to match
+// Person B's demo store. A mapper will convert at the DB boundary when
+// we wire real Neon queries.
 export const users = pgTable("users", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   role: text("role", { enum: ["admin", "finance", "case_manager"] }).notNull(),
-  avatarInitials: text("avatar_initials").notNull(),
+  title: text("title"),
+  initials: text("initials").notNull(),
 });
 
 // ─── Grants ──────────────────────────────────────────────────────

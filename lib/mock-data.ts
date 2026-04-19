@@ -1,7 +1,10 @@
 /**
  * Static mock data for Workstream C (dashboard, grants, reporting, audit).
  * This lets the UI work fully before the live DB is wired up.
- * Shape matches the DB schema exactly so swapping to real queries is a drop-in.
+ *
+ * Shapes are imported from `lib/types.ts` (the shared app contract) so
+ * this module is interchangeable with Person B's `lib/demo-store.ts` at
+ * merge time: dates are ISO strings, amounts are whole dollars.
  */
 
 import type {
@@ -12,13 +15,35 @@ import type {
   Card,
   Authorization,
   Approval,
-} from "./db/schema";
+} from "./types";
+import { formatCurrencyCompact } from "./format";
 
 // ─── Users ───────────────────────────────────────────────────────
 export const USERS: User[] = [
-  { id: "user_dana", name: "Dana Okafor", role: "admin", avatarInitials: "DO" },
-  { id: "user_marcus", name: "Marcus Webb", role: "finance", avatarInitials: "MW" },
-  { id: "user_luis", name: "Luis Herrera", role: "case_manager", avatarInitials: "LH" },
+  {
+    id: "user_dana",
+    name: "Dana Okafor",
+    role: "admin",
+    title: "Operations director",
+    initials: "DO",
+    avatarInitials: "DO",
+  },
+  {
+    id: "user_marcus",
+    name: "Marcus Webb",
+    role: "finance",
+    title: "Finance lead",
+    initials: "MW",
+    avatarInitials: "MW",
+  },
+  {
+    id: "user_luis",
+    name: "Luis Herrera",
+    role: "case_manager",
+    title: "Case manager",
+    initials: "LH",
+    avatarInitials: "LH",
+  },
 ];
 
 // ─── Grants ──────────────────────────────────────────────────────
@@ -27,33 +52,33 @@ export const GRANTS: Grant[] = [
     id: "grant_hud",
     name: "HUD ESG 2026",
     funder: "U.S. Dept. of Housing and Urban Development",
-    totalAmount: 20000000, // $200,000
-    startDate: new Date("2026-01-01"),
-    endDate: new Date("2026-12-31"),
+    totalAmount: 200_000,
+    startDate: "2026-01-01",
+    endDate: "2026-12-31",
   },
   {
     id: "grant_usda",
     name: "USDA SNAP-Ed 2026",
     funder: "USDA Food and Nutrition Service",
-    totalAmount: 8500000, // $85,000
-    startDate: new Date("2026-01-01"),
-    endDate: new Date("2026-12-31"),
+    totalAmount: 85_000,
+    startDate: "2026-01-01",
+    endDate: "2026-12-31",
   },
   {
     id: "grant_cdbg",
     name: "CDBG Emergency Relief",
     funder: "City of San Francisco — OEWD",
-    totalAmount: 5000000, // $50,000
-    startDate: new Date("2026-02-01"),
-    endDate: new Date("2026-06-15"), // ~60 days from today — demo "at risk"
+    totalAmount: 50_000,
+    startDate: "2026-02-01",
+    endDate: "2026-06-15", // ~60 days from demo date — "at risk" scenario
   },
   {
     id: "grant_blue_shield",
     name: "Blue Shield Health Equity",
     funder: "Blue Shield of California Foundation",
-    totalAmount: 3000000, // $30,000
-    startDate: new Date("2026-03-01"),
-    endDate: new Date("2026-09-30"),
+    totalAmount: 30_000,
+    startDate: "2026-03-01",
+    endDate: "2026-09-30",
   },
 ];
 
@@ -66,13 +91,14 @@ export const POLICIES: Policy[] = [
     mccAllow: ["6513"],
     mccBlock: [],
     merchantAllow: ["Coastal Property", "Bay Area Housing", "Sunrise Apts"],
-    perTxnLimit: 180000, // $1,800
-    totalLimit: 360000, // $3,600
-    approvalThreshold: 120000, // $1,200
+    perTxnLimit: 1_800,
+    totalLimit: 3_600,
+    approvalThreshold: 1_200,
     approverUserId: "user_marcus",
     singleUse: true,
     windowDays: 30,
-    createdAt: new Date("2026-01-15"),
+    status: "active",
+    createdAt: "2026-01-15",
   },
   {
     id: "policy_grocery",
@@ -81,13 +107,14 @@ export const POLICIES: Policy[] = [
     mccAllow: ["5411", "5912"],
     mccBlock: ["5921"],
     merchantAllow: [],
-    perTxnLimit: 20000, // $200
-    totalLimit: 80000, // $800
+    perTxnLimit: 200,
+    totalLimit: 800,
     approvalThreshold: null,
     approverUserId: null,
     singleUse: false,
     windowDays: 90,
-    createdAt: new Date("2026-01-20"),
+    status: "active",
+    createdAt: "2026-01-20",
   },
   {
     id: "policy_transit",
@@ -96,13 +123,14 @@ export const POLICIES: Policy[] = [
     mccAllow: ["4111", "4121", "4789"],
     mccBlock: [],
     merchantAllow: [],
-    perTxnLimit: 15000, // $150
-    totalLimit: 45000, // $450
+    perTxnLimit: 150,
+    totalLimit: 450,
     approvalThreshold: null,
     approverUserId: null,
     singleUse: false,
     windowDays: 60,
-    createdAt: new Date("2026-02-10"),
+    status: "active",
+    createdAt: "2026-02-10",
   },
   {
     id: "policy_medical",
@@ -111,13 +139,14 @@ export const POLICIES: Policy[] = [
     mccAllow: ["8049", "8099", "5912"],
     mccBlock: [],
     merchantAllow: [],
-    perTxnLimit: 10000, // $100
-    totalLimit: 30000, // $300
-    approvalThreshold: 5000, // $50
+    perTxnLimit: 100,
+    totalLimit: 300,
+    approvalThreshold: 50,
     approverUserId: "user_marcus",
     singleUse: false,
     windowDays: 90,
-    createdAt: new Date("2026-03-05"),
+    status: "active",
+    createdAt: "2026-03-05",
   },
 ];
 
@@ -140,7 +169,7 @@ export const CARDS: Card[] = [
     stripeCardId: "ic_test_001",
     last4: "4291",
     issuedByUserId: "user_luis",
-    issuedAt: new Date("2026-04-01"),
+    issuedAt: "2026-04-01",
     status: "active",
   },
   {
@@ -150,7 +179,7 @@ export const CARDS: Card[] = [
     stripeCardId: "ic_test_002",
     last4: "8833",
     issuedByUserId: "user_luis",
-    issuedAt: new Date("2026-03-15"),
+    issuedAt: "2026-03-15",
     status: "active",
   },
   {
@@ -160,7 +189,7 @@ export const CARDS: Card[] = [
     stripeCardId: "ic_test_003",
     last4: "1147",
     issuedByUserId: "user_luis",
-    issuedAt: new Date("2026-03-20"),
+    issuedAt: "2026-03-20",
     status: "active",
   },
   {
@@ -170,7 +199,7 @@ export const CARDS: Card[] = [
     stripeCardId: "ic_test_004",
     last4: "6620",
     issuedByUserId: "user_luis",
-    issuedAt: new Date("2026-02-20"),
+    issuedAt: "2026-02-20",
     status: "active",
   },
   {
@@ -180,7 +209,7 @@ export const CARDS: Card[] = [
     stripeCardId: "ic_test_005",
     last4: "3374",
     issuedByUserId: "user_luis",
-    issuedAt: new Date("2026-03-10"),
+    issuedAt: "2026-03-10",
     status: "active",
   },
   {
@@ -190,7 +219,7 @@ export const CARDS: Card[] = [
     stripeCardId: "ic_test_006",
     last4: "9902",
     issuedByUserId: "user_luis",
-    issuedAt: new Date("2026-03-05"),
+    issuedAt: "2026-03-05",
     status: "inactive",
   },
 ];
@@ -236,10 +265,10 @@ function generateHistorical(): Authorization[] {
   };
 
   const POLICY_AMOUNT: Record<string, { min: number; max: number }> = {
-    policy_rent: { min: 70000, max: 180000 },
-    policy_grocery: { min: 4000, max: 18000 },
-    policy_transit: { min: 800, max: 4500 },
-    policy_medical: { min: 1500, max: 9000 },
+    policy_rent: { min: 700, max: 1_800 },
+    policy_grocery: { min: 40, max: 180 },
+    policy_transit: { min: 8, max: 45 },
+    policy_medical: { min: 15, max: 90 },
   };
 
   // For each card, generate backfilled transactions from its issuedAt through now
@@ -254,7 +283,7 @@ function generateHistorical(): Authorization[] {
     const amountRange = POLICY_AMOUNT[policy.id];
     if (!merchants || !amountRange) continue;
 
-    const start = card.issuedAt.getTime();
+    const start = new Date(card.issuedAt).getTime();
     const end = now.getTime();
     const days = Math.max(1, Math.floor((end - start) / 86_400_000));
 
@@ -309,7 +338,7 @@ function generateHistorical(): Authorization[] {
         reason,
         ruleFired,
         approvalId: null,
-        decidedAt: when,
+        decidedAt: when.toISOString(),
       });
     }
   }
@@ -328,12 +357,12 @@ export const AUTHORIZATIONS: Authorization[] = [
     cardId: "card_001",
     merchantName: "Coastal Property Mgmt",
     merchantMcc: "6513",
-    amount: 90000, // $900
+    amount: 900,
     decision: "approved",
     reason: "within_policy",
     ruleFired: "within_policy",
     approvalId: null,
-    decidedAt: new Date("2026-04-14T10:23:00"),
+    decidedAt: "2026-04-14T10:23:00Z",
   },
   {
     id: "auth_002",
@@ -341,12 +370,12 @@ export const AUTHORIZATIONS: Authorization[] = [
     cardId: "card_001",
     merchantName: "Coastal Property Mgmt",
     merchantMcc: "6513",
-    amount: 140000, // $1,400
+    amount: 1_400,
     decision: "approved",
     reason: "approved_by_approver",
     ruleFired: "approved_by_approver",
     approvalId: "appr_001",
-    decidedAt: new Date("2026-04-14T14:45:00"),
+    decidedAt: "2026-04-14T14:45:00Z",
   },
   {
     id: "auth_003",
@@ -354,12 +383,12 @@ export const AUTHORIZATIONS: Authorization[] = [
     cardId: "card_001",
     merchantName: "Liquor Palace",
     merchantMcc: "5921",
-    amount: 4200, // $42
+    amount: 42,
     decision: "declined",
     reason: "mcc_blocked",
     ruleFired: "mcc_blocked",
     approvalId: null,
-    decidedAt: new Date("2026-04-13T16:10:00"),
+    decidedAt: "2026-04-13T16:10:00Z",
   },
   {
     id: "auth_004",
@@ -367,12 +396,12 @@ export const AUTHORIZATIONS: Authorization[] = [
     cardId: "card_006",
     merchantName: "Bay Area Housing LLC",
     merchantMcc: "6513",
-    amount: 160000, // $1,600
+    amount: 1_600,
     decision: "pending_approval",
     reason: "needs_approval",
     ruleFired: "needs_approval",
     approvalId: "appr_002",
-    decidedAt: new Date("2026-04-18T09:15:00"),
+    decidedAt: "2026-04-18T09:15:00Z",
   },
   // === USDA grocery ===
   {
@@ -381,12 +410,12 @@ export const AUTHORIZATIONS: Authorization[] = [
     cardId: "card_002",
     merchantName: "Safeway #1412",
     merchantMcc: "5411",
-    amount: 8750, // $87.50
+    amount: 88,
     decision: "approved",
     reason: "within_policy",
     ruleFired: "within_policy",
     approvalId: null,
-    decidedAt: new Date("2026-04-12T11:05:00"),
+    decidedAt: "2026-04-12T11:05:00Z",
   },
   {
     id: "auth_006",
@@ -394,12 +423,12 @@ export const AUTHORIZATIONS: Authorization[] = [
     cardId: "card_002",
     merchantName: "Safeway #1412",
     merchantMcc: "5411",
-    amount: 12400, // $124
+    amount: 124,
     decision: "approved",
     reason: "within_policy",
     ruleFired: "within_policy",
     approvalId: null,
-    decidedAt: new Date("2026-04-15T09:20:00"),
+    decidedAt: "2026-04-15T09:20:00Z",
   },
   {
     id: "auth_007",
@@ -407,12 +436,12 @@ export const AUTHORIZATIONS: Authorization[] = [
     cardId: "card_003",
     merchantName: "Rainbow Grocery",
     merchantMcc: "5411",
-    amount: 6530, // $65.30
+    amount: 65,
     decision: "approved",
     reason: "within_policy",
     ruleFired: "within_policy",
     approvalId: null,
-    decidedAt: new Date("2026-04-10T13:45:00"),
+    decidedAt: "2026-04-10T13:45:00Z",
   },
   {
     id: "auth_008",
@@ -420,12 +449,12 @@ export const AUTHORIZATIONS: Authorization[] = [
     cardId: "card_003",
     merchantName: "7-Eleven",
     merchantMcc: "5912",
-    amount: 3200, // $32
+    amount: 32,
     decision: "declined",
     reason: "merchant_not_allowed",
     ruleFired: "merchant_not_allowed",
     approvalId: null,
-    decidedAt: new Date("2026-04-11T08:30:00"),
+    decidedAt: "2026-04-11T08:30:00Z",
   },
   // === CDBG transit ===
   {
@@ -434,12 +463,12 @@ export const AUTHORIZATIONS: Authorization[] = [
     cardId: "card_004",
     merchantName: "BART — SF Civic Ctr",
     merchantMcc: "4111",
-    amount: 900, // $9
+    amount: 9,
     decision: "approved",
     reason: "within_policy",
     ruleFired: "within_policy",
     approvalId: null,
-    decidedAt: new Date("2026-04-08T08:10:00"),
+    decidedAt: "2026-04-08T08:10:00Z",
   },
   {
     id: "auth_010",
@@ -447,12 +476,12 @@ export const AUTHORIZATIONS: Authorization[] = [
     cardId: "card_004",
     merchantName: "Lyft",
     merchantMcc: "4121",
-    amount: 1850, // $18.50
+    amount: 18,
     decision: "approved",
     reason: "within_policy",
     ruleFired: "within_policy",
     approvalId: null,
-    decidedAt: new Date("2026-04-09T14:30:00"),
+    decidedAt: "2026-04-09T14:30:00Z",
   },
   {
     id: "auth_011",
@@ -460,12 +489,12 @@ export const AUTHORIZATIONS: Authorization[] = [
     cardId: "card_004",
     merchantName: "Discount Tire",
     merchantMcc: "5571",
-    amount: 32000, // $320
+    amount: 320,
     decision: "declined",
     reason: "mcc_blocked",
     ruleFired: "mcc_blocked",
     approvalId: null,
-    decidedAt: new Date("2026-04-10T10:00:00"),
+    decidedAt: "2026-04-10T10:00:00Z",
   },
   // === Blue Shield medical ===
   {
@@ -474,12 +503,12 @@ export const AUTHORIZATIONS: Authorization[] = [
     cardId: "card_005",
     merchantName: "SF Community Clinic",
     merchantMcc: "8099",
-    amount: 3500, // $35
+    amount: 35,
     decision: "approved",
     reason: "within_policy",
     ruleFired: "within_policy",
     approvalId: null,
-    decidedAt: new Date("2026-04-07T15:00:00"),
+    decidedAt: "2026-04-07T15:00:00Z",
   },
   {
     id: "auth_013",
@@ -487,12 +516,12 @@ export const AUTHORIZATIONS: Authorization[] = [
     cardId: "card_005",
     merchantName: "Walgreens #5502",
     merchantMcc: "5912",
-    amount: 2200, // $22
+    amount: 22,
     decision: "approved",
     reason: "within_policy",
     ruleFired: "within_policy",
     approvalId: null,
-    decidedAt: new Date("2026-04-13T12:15:00"),
+    decidedAt: "2026-04-13T12:15:00Z",
   },
   {
     id: "auth_014",
@@ -500,12 +529,12 @@ export const AUTHORIZATIONS: Authorization[] = [
     cardId: "card_005",
     merchantName: "SF Community Clinic",
     merchantMcc: "8099",
-    amount: 7500, // $75 — above threshold
+    amount: 75,
     decision: "approved",
     reason: "approved_by_approver",
     ruleFired: "approved_by_approver",
     approvalId: "appr_003",
-    decidedAt: new Date("2026-04-16T10:30:00"),
+    decidedAt: "2026-04-16T10:30:00Z",
   },
 ];
 
@@ -517,9 +546,9 @@ export const APPROVALS: Approval[] = [
     cardId: "card_001",
     approverUserId: "user_marcus",
     status: "approved",
-    requestedAt: new Date("2026-04-14T14:30:00"),
-    resolvedAt: new Date("2026-04-14T14:44:00"),
-    consumedAt: new Date("2026-04-14T14:45:00"),
+    requestedAt: "2026-04-14T14:30:00Z",
+    resolvedAt: "2026-04-14T14:44:00Z",
+    consumedAt: "2026-04-14T14:45:00Z",
   },
   {
     id: "appr_002",
@@ -527,7 +556,7 @@ export const APPROVALS: Approval[] = [
     cardId: "card_006",
     approverUserId: "user_marcus",
     status: "pending",
-    requestedAt: new Date("2026-04-18T09:15:00"),
+    requestedAt: "2026-04-18T09:15:00Z",
     resolvedAt: null,
     consumedAt: null,
   },
@@ -537,9 +566,9 @@ export const APPROVALS: Approval[] = [
     cardId: "card_005",
     approverUserId: "user_marcus",
     status: "approved",
-    requestedAt: new Date("2026-04-16T10:15:00"),
-    resolvedAt: new Date("2026-04-16T10:28:00"),
-    consumedAt: new Date("2026-04-16T10:30:00"),
+    requestedAt: "2026-04-16T10:15:00Z",
+    resolvedAt: "2026-04-16T10:28:00Z",
+    consumedAt: "2026-04-16T10:30:00Z",
   },
 ];
 
@@ -549,7 +578,8 @@ export type TransactionRow = {
   id: string;
   merchantName: string;
   merchantMcc: string;
-  amount: number; // cents
+  /** Whole-dollar amount. */
+  amount: number;
   decision: "approved" | "declined" | "pending_approval";
   reason: string;
   ruleFired: string | null;
@@ -561,20 +591,21 @@ export type TransactionRow = {
   grantName: string;
   cardholderId: string;
   cardholderName: string;
-  decidedAt: Date;
+  /** ISO timestamp. */
+  decidedAt: string;
 };
 
 export type ApprovalRow = {
   id: string;
-  amount: number; // cents
+  amount: number;
   merchantName: string;
   cardLast4: string | null;
   cardholderName: string;
   policyName: string;
   grantName: string;
   status: "pending" | "approved" | "declined";
-  requestedAt: Date;
-  resolvedAt: Date | null;
+  requestedAt: string;
+  resolvedAt: string | null;
   approverName: string;
 };
 
@@ -582,11 +613,11 @@ export type GrantSummary = {
   id: string;
   name: string;
   funder: string;
-  totalAmount: number; // cents
-  spentAmount: number; // cents (sum of approved auths)
-  remainingAmount: number; // cents
-  startDate: Date;
-  endDate: Date;
+  totalAmount: number;
+  spentAmount: number;
+  remainingAmount: number;
+  startDate: string;
+  endDate: string;
   pendingApprovals: number;
   activePolicies: number;
   activeCards: number;
@@ -634,7 +665,9 @@ export function getTransactions(): TransactionRow[] {
       cardholderName: cardholder.name,
       decidedAt: auth.decidedAt,
     };
-  }).sort((a, b) => b.decidedAt.getTime() - a.decidedAt.getTime());
+  }).sort(
+    (a, b) => new Date(b.decidedAt).getTime() - new Date(a.decidedAt).getTime(),
+  );
 }
 
 export function getApprovalRows(): ApprovalRow[] {
@@ -658,7 +691,10 @@ export function getApprovalRows(): ApprovalRow[] {
       resolvedAt: appr.resolvedAt,
       approverName: approver.name,
     };
-  }).sort((a, b) => b.requestedAt.getTime() - a.requestedAt.getTime());
+  }).sort(
+    (a, b) =>
+      new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime(),
+  );
 }
 
 export function getGrantSummaries(): GrantSummary[] {
@@ -741,7 +777,9 @@ export function getDashboardStats() {
 
   const allTransactions = getTransactions();
   const approvedThisMonth = allTransactions.filter(
-    (t) => t.decision === "approved" && t.decidedAt >= thisMonthStart
+    (t) =>
+      t.decision === "approved" &&
+      new Date(t.decidedAt).getTime() >= thisMonthStart.getTime(),
   );
   const deployedThisMonth = approvedThisMonth.reduce(
     (sum, t) => sum + t.amount,
@@ -753,7 +791,9 @@ export function getDashboardStats() {
     (t) => t.decision === "declined"
   ).length;
   const activeGrants = GRANTS.filter(
-    (g) => g.startDate <= now && g.endDate >= now
+    (g) =>
+      new Date(g.startDate).getTime() <= now.getTime() &&
+      new Date(g.endDate).getTime() >= now.getTime(),
   ).length;
 
   return {
@@ -772,7 +812,7 @@ export function getSpendOverTime(): { date: string; amount: number }[] {
     d.setDate(d.getDate() - i);
     const dateStr = d.toISOString().split("T")[0];
     const amount = AUTHORIZATIONS.filter((a) => {
-      const authDate = a.decidedAt.toISOString().split("T")[0];
+      const authDate = a.decidedAt.slice(0, 10);
       return a.decision === "approved" && authDate === dateStr;
     }).reduce((sum, a) => sum + a.amount, 0);
     last30.push({ date: dateStr, amount });
@@ -825,12 +865,12 @@ export function getGrantPacing(grantId: string) {
   if (!grant) return null;
 
   const now = new Date();
-  const totalDays = Math.ceil(
-    (grant.endDate.getTime() - grant.startDate.getTime()) / 86_400_000
-  );
+  const start = new Date(grant.startDate).getTime();
+  const end = new Date(grant.endDate).getTime();
+  const totalDays = Math.ceil((end - start) / 86_400_000);
   const daysElapsed = Math.max(
     0,
-    Math.ceil((now.getTime() - grant.startDate.getTime()) / 86_400_000)
+    Math.ceil((now.getTime() - start) / 86_400_000),
   );
   const daysRemaining = Math.max(0, totalDays - daysElapsed);
 
@@ -890,11 +930,13 @@ function buildBurnSeries(
     projected: number | null;
   }[] = [];
 
+  const grantStart = new Date(grant.startDate).getTime();
+
   // cumulative actual spend keyed by day index from grant start
   const dailyActual = new Map<number, number>();
   for (const a of auths) {
     const dayIdx = Math.floor(
-      (a.decidedAt.getTime() - grant.startDate.getTime()) / 86_400_000
+      (new Date(a.decidedAt).getTime() - grantStart) / 86_400_000,
     );
     dailyActual.set(dayIdx, (dailyActual.get(dayIdx) ?? 0) + a.amount);
   }
@@ -915,7 +957,7 @@ function buildBurnSeries(
     }
     cumActual = accum;
 
-    const date = new Date(grant.startDate.getTime() + d * 86_400_000);
+    const date = new Date(grantStart + d * 86_400_000);
     const isPast = d <= daysElapsed;
     const isFuture = d > daysElapsed;
 
@@ -983,9 +1025,9 @@ export function getGrantHealth(grantId: string): {
   // Days remaining check
   if (pacing.daysRemaining < 30 && pacing.projectedUnderspend > 0) {
     reasons.push(
-      `${pacing.daysRemaining} days left, projected to underspend by ${formatCentsCompact(
-        pacing.projectedUnderspend
-      )}`
+      `${pacing.daysRemaining} days left, projected to underspend by ${formatCurrencyCompact(
+        pacing.projectedUnderspend,
+      )}`,
     );
     worst = "at_risk";
   }
@@ -1014,29 +1056,24 @@ export function getGrantHealth(grantId: string): {
   return { status: worst, label: LABELS[worst], reasons };
 }
 
-function formatCentsCompact(cents: number): string {
-  const abs = Math.abs(cents);
-  const sign = cents < 0 ? "-" : "";
-  if (abs >= 100000) return `${sign}$${Math.round(abs / 100 / 1000)}K`;
-  return `${sign}$${Math.round(abs / 100)}`;
-}
-
 /** Which grants need attention — expiring soon with money left, or off-pace */
 export function getExpiringFunds() {
   const now = new Date();
   const alerts = GRANTS.map((g) => {
     const pacing = getGrantPacing(g.id);
     if (!pacing) return null;
-    const daysLeft = Math.ceil((g.endDate.getTime() - now.getTime()) / 86_400_000);
+    const daysLeft = Math.ceil(
+      (new Date(g.endDate).getTime() - now.getTime()) / 86_400_000,
+    );
     const remaining = g.totalAmount - pacing.spent;
     const projectedUnspent = Math.max(
       0,
-      g.totalAmount - pacing.projectedFinal
+      g.totalAmount - pacing.projectedFinal,
     );
 
     // only surface if there's meaningful money at risk
     if (daysLeft > 120) return null;
-    if (remaining < 100000) return null; // < $1,000
+    if (remaining < 1_000) return null;
 
     return {
       grantId: g.id,

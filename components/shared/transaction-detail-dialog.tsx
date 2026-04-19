@@ -30,8 +30,8 @@ interface Props {
     approver?: { name: string } | null;
     approval?: {
       id: string;
-      requestedAt: Date;
-      resolvedAt: Date | null;
+      requestedAt: string;
+      resolvedAt: string | null;
       status: string;
     } | null;
     policy?: {
@@ -44,14 +44,16 @@ interface Props {
   } | null;
 }
 
-function formatAbsoluteTime(d: Date): string {
-  return d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+const absoluteTimeFormatter = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+});
+
+function formatAbsoluteTime(value: string): string {
+  return absoluteTimeFormatter.format(new Date(value));
 }
 
 export function TransactionDetailDialog({ open, onOpenChange, detail }: Props) {

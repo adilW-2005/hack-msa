@@ -11,7 +11,7 @@ type AuditEvent = {
   id: string;
   type: "authorization" | "approval";
   txnId: string | null;
-  timestamp: Date;
+  timestamp: string;
   title: string;
   subtitle: string;
   amount?: number;
@@ -25,8 +25,8 @@ interface TransactionDetail {
   approver?: { name: string } | null;
   approval?: {
     id: string;
-    requestedAt: Date;
-    resolvedAt: Date | null;
+    requestedAt: string;
+    resolvedAt: string | null;
     status: string;
   } | null;
   policy?: {
