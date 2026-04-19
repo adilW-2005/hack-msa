@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
 
 import {
   approvals,
@@ -10,6 +10,8 @@ import {
   users,
 } from "@/db/schema";
 import { getDb } from "@/lib/db";
+import { APPROVAL_REUSE_WINDOW_MS, decide } from "@/lib/decide";
+import { MCC_OPTIONS, mccLabel } from "@/lib/format";
 import {
   issueCard as issueLiveCard,
   resolveApproval as resolveLiveApproval,
@@ -20,6 +22,7 @@ import type {
   ApprovalsPayload,
   Cardholder,
   IssueCardPayload,
+  MerchantReference,
   PolicyStudioPayload,
   PolicyView,
   SwipeScenario,
@@ -71,6 +74,18 @@ function decisionForUi(value: string) {
   return value === "captured" ? "approved" : value;
 }
 
+function toDecisionValue(decision: "approve" | "decline" | "require_approval") {
+  if (decision === "approve") {
+    return "approved" as const;
+  }
+
+  if (decision === "require_approval") {
+    return "pending_approval" as const;
+  }
+
+  return "declined" as const;
+}
+
 function personaFor(id: string, name: string) {
   const existing = PERSONA_DETAILS[id];
 
@@ -113,6 +128,64 @@ async function getSpentAmountForCard(cardId: string) {
     );
 
   return row?.amount ?? 0;
+}
+
+async function getSuccessfulAuthorizationCount(cardId: string) {
+  const [row] = await getDb()
+    .select({ count: sql<number>`count(*)`.mapWith(Number) })
+    .from(authorizations)
+    .where(
+      and(
+        eq(authorizations.cardId, cardId),
+        or(
+          eq(authorizations.decision, "approved"),
+          eq(authorizations.decision, "captured"),
+        ),
+      ),
+    );
+
+  return row?.count ?? 0;
+}
+
+async function getGrantSpentAmount(grantId: string) {
+  const [row] = await getDb()
+    .select({
+      amount:
+        sql<number>`coalesce(sum(${authorizations.amount}), 0)`.mapWith(Number),
+    })
+    .from(authorizations)
+    .innerJoin(cards, eq(cards.id, authorizations.cardId))
+    .innerJoin(policies, eq(policies.id, cards.policyId))
+    .where(
+      and(
+        eq(policies.grantId, grantId),
+        or(
+          eq(authorizations.decision, "approved"),
+          eq(authorizations.decision, "captured"),
+        ),
+      ),
+    );
+
+  return row?.amount ?? 0;
+}
+
+async function getReusableApproval(cardId: string) {
+  const windowStart = new Date(Date.now() - APPROVAL_REUSE_WINDOW_MS);
+  const [approval] = await getDb()
+    .select()
+    .from(approvals)
+    .where(
+      and(
+        eq(approvals.cardId, cardId),
+        eq(approvals.status, "approved"),
+        isNull(approvals.consumedAt),
+        gte(approvals.resolvedAt, windowStart),
+      ),
+    )
+    .orderBy(desc(approvals.resolvedAt))
+    .limit(1);
+
+  return approval ?? null;
 }
 
 async function buildCardSummaries() {
@@ -228,6 +301,35 @@ async function getLatestAuthorization(cardId: string) {
     .limit(1);
 
   return row ?? null;
+}
+
+async function buildMerchantReferences(): Promise<MerchantReference[]> {
+  const rows = await getDb()
+    .select({
+      merchantName: authorizations.merchantName,
+      merchantMcc: authorizations.merchantMcc,
+      decidedAt: authorizations.decidedAt,
+    })
+    .from(authorizations)
+    .orderBy(desc(authorizations.decidedAt));
+
+  const seen = new Set<string>();
+  const merchants: MerchantReference[] = [];
+
+  for (const row of rows) {
+    if (seen.has(row.merchantName)) {
+      continue;
+    }
+
+    seen.add(row.merchantName);
+    merchants.push({
+      name: row.merchantName,
+      mcc: row.merchantMcc,
+      label: `${row.merchantName} • ${mccLabel(row.merchantMcc)}`,
+    });
+  }
+
+  return merchants;
 }
 
 async function buildApprovalViews(approverUserId?: string): Promise<ApprovalView[]> {
@@ -408,11 +510,11 @@ function buildScenarios(policyId?: string): SwipeScenario[] {
     },
     {
       id: "transport-threshold",
-      title: "$120 at Uber",
-      description: "Crosses the approval threshold and moves into the inbox.",
+      title: "$80 at Uber",
+      description: "Crosses the approval threshold while staying within the card limit.",
       merchantName: "Uber",
       merchantMcc: "4121",
-      amount: 120,
+      amount: 80,
     },
   ];
 }
@@ -429,6 +531,124 @@ async function waitForFreshTransaction(cardId: string, previousId: string | null
   }
 
   throw new Error("Timed out waiting for the authorization webhook to write a row.");
+}
+
+async function createLocalDemoAuthorization(input: {
+  cardId: string;
+  merchantName: string;
+  merchantMcc: string;
+  amount: number;
+}) {
+  const db = getDb();
+  const [cardRecord] = await db
+    .select({
+      card: cards,
+      policy: policies,
+      grant: grants,
+    })
+    .from(cards)
+    .innerJoin(policies, eq(policies.id, cards.policyId))
+    .innerJoin(grants, eq(grants.id, policies.grantId))
+    .where(eq(cards.id, input.cardId))
+    .limit(1);
+
+  if (!cardRecord) {
+    throw new Error(`Card ${input.cardId} was not found.`);
+  }
+
+  const [cardSpentTotal, successfulAuthorizationCount, grantSpentAmount, reusableApproval] =
+    await Promise.all([
+      getSpentAmountForCard(input.cardId),
+      getSuccessfulAuthorizationCount(input.cardId),
+      getGrantSpentAmount(cardRecord.grant.id),
+      getReusableApproval(input.cardId),
+    ]);
+
+  const decision = decide({
+    authorization: {
+      amount: input.amount,
+      merchantName: input.merchantName,
+      merchantMcc: input.merchantMcc,
+    },
+    card: {
+      status: cardRecord.card.status,
+      issuedAt: cardRecord.card.issuedAt,
+      expiresAt: cardRecord.card.expiresAt,
+    },
+    policy: {
+      mccAllow: cardRecord.policy.mccAllow,
+      mccBlock: cardRecord.policy.mccBlock,
+      merchantAllow: cardRecord.policy.merchantAllow,
+      perTxnLimit: cardRecord.policy.perTxnLimit,
+      totalLimit: cardRecord.policy.totalLimit,
+      approvalThreshold: cardRecord.policy.approvalThreshold,
+      singleUse: cardRecord.policy.singleUse,
+      windowDays: cardRecord.policy.windowDays,
+    },
+    cardSpentTotal,
+    successfulAuthorizationCount,
+    grantRemaining: cardRecord.grant.totalAmount - grantSpentAmount,
+    approvedApproval: reusableApproval
+      ? {
+          id: reusableApproval.id,
+          resolvedAt: reusableApproval.resolvedAt ?? reusableApproval.requestedAt,
+          consumedAt: reusableApproval.consumedAt,
+        }
+      : null,
+  });
+
+  const authorizationId = createId("auth");
+  let approvalId: string | null = null;
+
+  await db.transaction(async (tx) => {
+    await tx.insert(authorizations).values({
+      id: authorizationId,
+      stripeAuthId: createId("demoauth"),
+      cardId: input.cardId,
+      merchantName: input.merchantName,
+      merchantMcc: input.merchantMcc,
+      amount: input.amount,
+      decision: toDecisionValue(decision.decision),
+      reason: decision.reason,
+      ruleFired: decision.ruleFired,
+      approvalId: null,
+      approvedByApprovalId: decision.approvedApprovalId ?? null,
+      decidedAt: new Date(),
+      metadata: { source: "local_demo" },
+    });
+
+    if (decision.decision === "require_approval") {
+      if (!cardRecord.policy.approverUserId) {
+        throw new Error(
+          `Policy ${cardRecord.policy.id} requires approval but has no approver.`,
+        );
+      }
+
+      approvalId = createId("approval");
+      await tx.insert(approvals).values({
+        id: approvalId,
+        authorizationId,
+        cardId: input.cardId,
+        approverUserId: cardRecord.policy.approverUserId,
+        status: "pending",
+        requestedAt: new Date(),
+      });
+
+      await tx
+        .update(authorizations)
+        .set({ approvalId })
+        .where(eq(authorizations.id, authorizationId));
+    }
+
+    if (decision.approvedApprovalId) {
+      await tx
+        .update(approvals)
+        .set({ consumedAt: new Date() })
+        .where(eq(approvals.id, decision.approvedApprovalId));
+    }
+  });
+
+  return authorizationId;
 }
 
 export async function getUsers(): Promise<User[]> {
@@ -459,7 +679,11 @@ export async function getCurrentUser(userId?: string) {
 
 export async function getPolicyStudioPayload(): Promise<PolicyStudioPayload> {
   const dbGrants = await getDb().select().from(grants);
-  const [policyViews, dbUsers] = await Promise.all([buildPolicyViews(), getUsers()]);
+  const [policyViews, dbUsers, merchantOptions] = await Promise.all([
+    buildPolicyViews(),
+    getUsers(),
+    buildMerchantReferences(),
+  ]);
 
   return {
     policies: policyViews,
@@ -472,6 +696,8 @@ export async function getPolicyStudioPayload(): Promise<PolicyStudioPayload> {
       endDate: grant.endDate.toISOString(),
     })),
     approvers: dbUsers.filter((user) => user.role !== "case_manager"),
+    mccOptions: MCC_OPTIONS,
+    merchantOptions,
   };
 }
 
@@ -593,14 +819,41 @@ export async function simulateSwipe(input: {
   amount: number;
 }) {
   const previous = await getLatestAuthorization(input.cardId);
-  await triggerDemoSwipe({
+  const [card] = await getDb()
+    .select({ stripeCardId: cards.stripeCardId })
+    .from(cards)
+    .where(eq(cards.id, input.cardId))
+    .limit(1);
+
+  if (!card) {
+    throw new Error(`Card ${input.cardId} was not found.`);
+  }
+
+  if (!card.stripeCardId.startsWith("ic_demo_")) {
+    await triggerDemoSwipe({
+      cardId: input.cardId,
+      merchantName: input.merchantName,
+      merchantMcc: input.merchantMcc,
+      amount: dollarsToCents(input.amount),
+    });
+
+    const liveCreatedId = await waitForFreshTransaction(input.cardId, previous?.id ?? null);
+    const payload = await getTransactionsPayload(input.cardId);
+    const transaction = payload.transactions.find((row) => row.id === liveCreatedId);
+
+    if (!transaction) {
+      throw new Error("Authorization was created but could not be loaded into the UI.");
+    }
+
+    return { payload, transaction };
+  }
+
+  const createdId = await createLocalDemoAuthorization({
     cardId: input.cardId,
     merchantName: input.merchantName,
     merchantMcc: input.merchantMcc,
     amount: dollarsToCents(input.amount),
   });
-
-  const createdId = await waitForFreshTransaction(input.cardId, previous?.id ?? null);
   const payload = await getTransactionsPayload(input.cardId);
   const transaction = payload.transactions.find((row) => row.id === createdId);
 

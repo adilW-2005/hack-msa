@@ -1,6 +1,6 @@
-# Lumen
+# Amanah
 
-Hackathon demo app for Lumen, a policy-first spend control product for nonprofits.
+Hackathon demo app for Amanah, a policy-first spend control product for nonprofits.
 
 ## What's implemented
 

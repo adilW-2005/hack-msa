@@ -7,9 +7,16 @@ import { getSessionUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
-export default async function PoliciesPage() {
+type PoliciesPageProps = {
+  searchParams?: Promise<{
+    created?: string;
+  }>;
+};
+
+export default async function PoliciesPage({ searchParams }: PoliciesPageProps) {
   noStore();
   const currentUser = await getSessionUser();
+  const params = searchParams ? await searchParams : undefined;
 
   if (currentUser.role !== "admin") {
     return (
@@ -22,5 +29,10 @@ export default async function PoliciesPage() {
 
   const payload = await getPolicyStudioPayload();
 
-  return <PolicyStudioView initialData={payload} />;
+  return (
+    <PolicyStudioView
+      initialData={payload}
+      showCreatedNotice={params?.created === "1"}
+    />
+  );
 }

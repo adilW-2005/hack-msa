@@ -20,9 +20,11 @@ const baseContext = {
     perTxnLimit: 25_000,
     totalLimit: 50_000,
     approvalThreshold: 12_000,
+    singleUse: false,
     windowDays: 30,
   },
   cardSpentTotal: 5_000,
+  successfulAuthorizationCount: 0,
   grantRemaining: 100_000,
   now: new Date("2026-04-15T12:00:00.000Z"),
 };
@@ -118,6 +120,22 @@ describe("decide", () => {
     expect(result).toMatchObject({
       decision: "decline",
       reason: "over_card_total",
+    });
+  });
+
+  it("declines when a single-use card has already been used", () => {
+    const result = decide({
+      ...baseContext,
+      policy: {
+        ...baseContext.policy,
+        singleUse: true,
+      },
+      successfulAuthorizationCount: 1,
+    });
+
+    expect(result).toMatchObject({
+      decision: "decline",
+      reason: "single_use_consumed",
     });
   });
 });

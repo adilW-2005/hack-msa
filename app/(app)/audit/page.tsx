@@ -15,7 +15,7 @@ export default async function AuditPage() {
     <div className="min-w-0">
       <PageHeader
         title="Audit Log"
-        subtitle="A chronological record of authorizations and approval actions flowing through the demo."
+        subtitle="A chronological record of authorizations and approval actions across the platform."
       />
 
       <div className="px-4 py-6 sm:px-6 lg:px-8">

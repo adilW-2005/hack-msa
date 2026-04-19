@@ -15,7 +15,7 @@ export default async function ApprovalsPage() {
     return (
       <RoleLocked
         title="Approvals belong to Finance or Admin"
-        body="Luis can issue cards and watch transactions, but the inbox stays with Marcus and Dana in this demo."
+        body="Luis can issue cards and review transactions, but approvals stay with Marcus and Dana."
       />
     );
   }

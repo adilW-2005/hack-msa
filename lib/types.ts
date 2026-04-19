@@ -167,6 +167,17 @@ export type PolicyView = {
   createdAt: string;
 };
 
+export type MccOption = {
+  code: string;
+  label: string;
+};
+
+export type MerchantReference = {
+  name: string;
+  mcc: string;
+  label: string;
+};
+
 export type AppSummary = {
   totalSwipes: number;
   approvedToday: number;
@@ -207,4 +218,6 @@ export type PolicyStudioPayload = {
   policies: PolicyView[];
   grants: Grant[];
   approvers: User[];
+  mccOptions: MccOption[];
+  merchantOptions: MerchantReference[];
 };

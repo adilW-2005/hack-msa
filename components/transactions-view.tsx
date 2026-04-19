@@ -1,29 +1,22 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   ArrowUpRight,
   CheckCircle2,
-  ChevronRight,
   CircleAlert,
   CreditCard,
   RotateCcw,
-  Store,
   Wallet,
   Zap,
 } from "lucide-react";
 
-import { EmptyState } from "@/components/empty-state";
+import { ExpenseLedgerTable } from "@/components/expense-ledger-table";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
-import { StatusPill } from "@/components/status-pill";
 import { ToastMessage } from "@/components/toast-message";
-import {
-  formatCurrency,
-  formatDateTime,
-  formatRelativeTime,
-  getReasonLabel,
-} from "@/lib/format";
+import { formatCurrency, getReasonLabel } from "@/lib/format";
 import type { TransactionsPayload } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -49,9 +42,6 @@ async function readJson<T>(response: Response): Promise<T> {
 
 export function TransactionsView({ initialData }: TransactionsViewProps) {
   const [data, setData] = useState(initialData);
-  const [selectedTransactionId, setSelectedTransactionId] = useState<string | null>(
-    null,
-  );
   const [toast, setToast] = useState<ToastState>(null);
   const [isMutating, setIsMutating] = useState(false);
 
@@ -69,28 +59,32 @@ export function TransactionsView({ initialData }: TransactionsViewProps) {
   const metrics = useMemo(
     () => [
       {
+        id: "swipes-today",
         label: "Swipes today",
         value: String(data.summary.totalSwipes),
-        hint: "All seeded and simulated authorizations across the demo workspace.",
+        hint: "All authorizations recorded across the workspace today.",
         icon: Zap,
         hero: true,
       },
       {
+        id: "approved-today",
         label: "Approved today",
         value: String(data.summary.approvedToday),
-        hint: "Auto-approved or retried after Marcus signs off.",
+        hint: "Auto-approved or cleared after a finance review.",
         icon: CheckCircle2,
       },
       {
+        id: "pending-approvals",
         label: "Pending approvals",
         value: String(data.summary.pendingApprovals),
-        hint: "Rows polling into the mobile approval inbox every two seconds.",
+        hint: "Requests currently waiting in the approvals inbox.",
         icon: CircleAlert,
       },
       {
+        id: "active-cards",
         label: "Active cards",
         value: String(data.summary.activeCards),
-        hint: "Live demo cards ready for the swipe simulator.",
+        hint: "Cards available for new authorizations.",
         icon: Wallet,
       },
     ],
@@ -110,19 +104,26 @@ export function TransactionsView({ initialData }: TransactionsViewProps) {
     } catch (error) {
       setToast({
         tone: "error",
-        title: "Couldn’t reload the simulator card",
+        title: "Couldn’t reload the selected card",
         body: error instanceof Error ? error.message : "Unknown error.",
       });
     }
   }
 
-  async function handleSwipe(payload: {
-    cardId: string;
-    merchantName: string;
-    merchantMcc: string;
-    amount: number;
-    retryLast?: boolean;
-  }) {
+  async function handleSwipe(
+    payload:
+      | {
+          cardId: string;
+          retryLast: true;
+        }
+      | {
+          cardId: string;
+          merchantName: string;
+          merchantMcc: string;
+          amount: number;
+          retryLast?: false;
+        },
+  ) {
     setIsMutating(true);
 
     try {
@@ -140,7 +141,6 @@ export function TransactionsView({ initialData }: TransactionsViewProps) {
       }>(response);
 
       setData(result.payload);
-      setSelectedTransactionId(result.transaction.id);
       setToast({
         tone:
           result.transaction.decision === "approved"
@@ -167,18 +167,11 @@ export function TransactionsView({ initialData }: TransactionsViewProps) {
     }
   }
 
-  const activeTransactionId =
-    selectedTransactionId && data.transactions.some((transaction) => transaction.id === selectedTransactionId)
-      ? selectedTransactionId
-      : data.transactions[0]?.id ?? null;
-  const activeTransaction =
-    data.transactions.find((transaction) => transaction.id === activeTransactionId) ?? null;
-
   return (
     <>
       <PageHeader
         title="Transactions"
-        subtitle="The operator control surface for live authorizations, decline reasons, and on-stage swipe simulation."
+        subtitle="Review expense activity, authorization outcomes, and policy decisions in a ledger-style view."
         rightSlot={
           <div className="flex flex-wrap items-center gap-3">
             <select
@@ -199,9 +192,6 @@ export function TransactionsView({ initialData }: TransactionsViewProps) {
                 handleSwipe({
                   cardId: data.selectedCardId ?? "",
                   retryLast: true,
-                  merchantName: "",
-                  merchantMcc: "",
-                  amount: 0,
                 })
               }
               className="inline-flex h-10 items-center gap-2 rounded-[14px] border border-border-strong bg-white px-4 text-[14px] font-medium text-ink disabled:opacity-50"
@@ -217,7 +207,7 @@ export function TransactionsView({ initialData }: TransactionsViewProps) {
         <div className="grid gap-4 xl:grid-cols-4">
           {metrics.map((metric, index) => (
             <StatCard
-              key={metric.label}
+              key={metric.id}
               label={metric.label}
               value={metric.value}
               hint={metric.hint}
@@ -232,98 +222,25 @@ export function TransactionsView({ initialData }: TransactionsViewProps) {
             <div className="flex items-center justify-between border-b border-border px-5 py-4">
               <div>
                 <h2 className="text-[18px] font-semibold tracking-[-0.01em] text-ink">
-                  Authorization stream
+                  Expense ledger
                 </h2>
                 <p className="mt-1 text-[13px] text-ink-muted">
-                  Click any row to inspect the policy rule, grant lineage, and retry state.
+                  Every authorization is visible inline so finance can scan spend like a spreadsheet.
                 </p>
               </div>
+              <Link
+                href="/transactions/ledger"
+                className="inline-flex h-10 items-center gap-2 rounded-[14px] border border-border-strong bg-white px-4 text-[14px] font-medium text-ink hover:bg-surface"
+              >
+                Open ledger page
+                <ArrowUpRight className="size-4" />
+              </Link>
             </div>
 
-            {data.transactions.length === 0 ? (
-              <div className="p-6">
-                <EmptyState
-                  icon={Zap}
-                  title="No transactions yet"
-                  body="Use the swipe simulator to generate the first real-time authorization for the demo."
-                />
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full border-collapse">
-                  <thead className="sticky top-0 z-10 bg-white">
-                    <tr className="border-b border-border">
-                      <th className="px-5 py-3 text-left text-[12px] font-medium uppercase tracking-[0.16em] text-ink-muted">
-                        Merchant
-                      </th>
-                      <th className="px-5 py-3 text-left text-[12px] font-medium uppercase tracking-[0.16em] text-ink-muted">
-                        Policy
-                      </th>
-                      <th className="px-5 py-3 text-left text-[12px] font-medium uppercase tracking-[0.16em] text-ink-muted">
-                        Status
-                      </th>
-                      <th className="px-5 py-3 text-right text-[12px] font-medium uppercase tracking-[0.16em] text-ink-muted">
-                        Amount
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.transactions.map((transaction) => {
-                      const isActive = transaction.id === activeTransactionId;
-                      return (
-                        <tr
-                          key={transaction.id}
-                          className={cn(
-                            "cursor-pointer border-b border-border transition hover:bg-surface",
-                            isActive && "bg-olive-50",
-                          )}
-                          onClick={() => setSelectedTransactionId(transaction.id)}
-                        >
-                          <td className="relative px-5 py-4 align-top">
-                            {isActive ? (
-                              <span className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-olive-500" />
-                            ) : null}
-                            <div className="flex items-start gap-3">
-                              <div className="mt-0.5 flex size-9 items-center justify-center rounded-[8px] bg-surface text-ink-muted">
-                                <Store className="size-4" />
-                              </div>
-                              <div>
-                                <p className="text-[14px] font-medium text-ink">
-                                  {transaction.merchantName}
-                                </p>
-                                <p className="mt-1 text-[12px] text-ink-muted">
-                                  MCC {transaction.merchantMcc} · {formatRelativeTime(transaction.decidedAt)}
-                                </p>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-5 py-4 align-top">
-                            <p className="text-[14px] font-medium text-ink">
-                              {transaction.policyName}
-                            </p>
-                            <p className="mt-1 text-[12px] text-ink-muted">
-                              {transaction.cardholderName} · •••• {transaction.cardLast4}
-                            </p>
-                          </td>
-                          <td className="px-5 py-4 align-top">
-                            <StatusPill type="decision" value={transaction.decision} />
-                            <p className="mt-2 max-w-[22ch] text-[12px] leading-5 text-ink-muted">
-                              {getReasonLabel(transaction.reason)}
-                            </p>
-                          </td>
-                          <td className="px-5 py-4 text-right align-top">
-                            <p className="tabular-nums text-[15px] font-semibold text-ink">
-                              {formatCurrency(transaction.amount)}
-                            </p>
-                            <ChevronRight className="ml-auto mt-2 size-4 text-ink-subtle" />
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            <ExpenseLedgerTable
+              transactions={data.transactions}
+              emptyBody="Use the test panel to generate the first authorization."
+            />
           </div>
 
           <div className="space-y-6">
@@ -332,15 +249,12 @@ export function TransactionsView({ initialData }: TransactionsViewProps) {
                 <div>
                   <div className="flex items-center gap-2 text-[18px] font-semibold tracking-[-0.01em] text-ink">
                     <Zap className="size-5 text-olive-700" />
-                    Swipe Simulator
+                    Test authorizations
                   </div>
                   <p className="mt-1 text-[13px] leading-6 text-ink-muted">
-                    Real demo button, fake network. It writes the same rows the UI reads.
+                    Trigger a test swipe to confirm the resulting policy decision in the ledger.
                   </p>
                 </div>
-                <span className="rounded-full bg-olive-100 px-3 py-1 text-[12px] font-medium text-olive-700">
-                  Demo-only
-                </span>
               </div>
 
               {selectedCard ? (
@@ -414,7 +328,7 @@ export function TransactionsView({ initialData }: TransactionsViewProps) {
                 Active cards
               </h2>
               <p className="mt-1 text-[13px] leading-6 text-ink-muted">
-                Use the selector above to swap policies and test different outcomes.
+                Use the selector above to switch cards and review different spend controls.
               </p>
               <div className="mt-4 space-y-3">
                 {data.cards.map((card) => (
@@ -450,100 +364,6 @@ export function TransactionsView({ initialData }: TransactionsViewProps) {
           </div>
         </div>
       </div>
-
-      {selectedTransactionId && activeTransaction ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-[rgba(15,15,15,0.48)] p-4">
-          <div className="panel panel-elevated w-full max-w-2xl overflow-hidden bg-white">
-            <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-5">
-              <div>
-                <p className="text-[12px] font-medium uppercase tracking-[0.16em] text-ink-muted">
-                  Transaction detail
-                </p>
-                <h2 className="mt-2 text-[24px] font-semibold tracking-[-0.01em] text-ink">
-                  {activeTransaction.merchantName}
-                </h2>
-                <p className="mt-1 text-[13px] text-ink-muted">
-                  {formatDateTime(activeTransaction.decidedAt)} · MCC {activeTransaction.merchantMcc}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedTransactionId(null)}
-                className="rounded-full border border-border bg-white px-3 py-2 text-[13px] font-medium text-ink"
-              >
-                Close
-              </button>
-            </div>
-
-            <div className="grid gap-6 px-6 py-6 md:grid-cols-2">
-              <div className="space-y-5">
-                <div>
-                  <p className="text-[12px] font-medium uppercase tracking-[0.16em] text-ink-muted">
-                    Outcome
-                  </p>
-                  <div className="mt-3">
-                    <StatusPill type="decision" value={activeTransaction.decision} />
-                  </div>
-                  <p className="mt-3 text-[14px] leading-6 text-ink-muted">
-                    {getReasonLabel(activeTransaction.reason)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[12px] font-medium uppercase tracking-[0.16em] text-ink-muted">
-                    Amount
-                  </p>
-                  <p className="mt-2 text-[32px] font-semibold tracking-[-0.02em] text-ink tabular-nums">
-                    {formatCurrency(activeTransaction.amount)}
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-4 rounded-[20px] border border-border bg-surface p-5">
-                <div>
-                  <p className="text-[12px] font-medium uppercase tracking-[0.16em] text-ink-muted">
-                    Card
-                  </p>
-                  <p className="mt-2 text-[15px] font-medium text-ink">
-                    {activeTransaction.cardholderName} · •••• {activeTransaction.cardLast4}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[12px] font-medium uppercase tracking-[0.16em] text-ink-muted">
-                    Policy
-                  </p>
-                  <p className="mt-2 text-[15px] font-medium text-ink">
-                    {activeTransaction.policyName}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[12px] font-medium uppercase tracking-[0.16em] text-ink-muted">
-                    Grant
-                  </p>
-                  <p className="mt-2 text-[15px] font-medium text-ink">
-                    {activeTransaction.grantName}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[12px] font-medium uppercase tracking-[0.16em] text-ink-muted">
-                    Rule fired
-                  </p>
-                  <p className="mt-2 font-mono text-[13px] text-ink">{activeTransaction.ruleFired}</p>
-                </div>
-                {activeTransaction.approverName ? (
-                  <div>
-                    <p className="text-[12px] font-medium uppercase tracking-[0.16em] text-ink-muted">
-                      Approver
-                    </p>
-                    <p className="mt-2 text-[15px] font-medium text-ink">
-                      {activeTransaction.approverName}
-                    </p>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       {toast ? <ToastMessage tone={toast.tone} title={toast.title} body={toast.body} /> : null}
     </>

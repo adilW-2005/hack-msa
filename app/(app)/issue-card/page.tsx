@@ -15,7 +15,7 @@ export default async function IssueCardPage() {
     return (
       <RoleLocked
         title="Card issuance belongs to Admin or Case Manager"
-        body="Marcus only approves threshold exceptions in this demo. Switch to Dana or Luis to issue new cards."
+        body="Marcus handles threshold approvals. Switch to Dana or Luis to issue new cards."
       />
     );
   }

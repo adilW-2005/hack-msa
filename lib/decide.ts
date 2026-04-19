@@ -4,6 +4,7 @@ export type Decision = "approve" | "decline" | "require_approval";
 
 export type DecisionReason =
   | "card_expired"
+  | "single_use_consumed"
   | "over_per_txn_limit"
   | "over_card_total"
   | "grant_exhausted"
@@ -31,9 +32,11 @@ export interface DecisionContext {
     perTxnLimit: number;
     totalLimit: number;
     approvalThreshold?: number | null;
+    singleUse: boolean;
     windowDays: number;
   };
   cardSpentTotal: number;
+  successfulAuthorizationCount: number;
   grantRemaining: number;
   approvedApproval?: {
     id: string;
@@ -65,6 +68,7 @@ export function decide(context: DecisionContext): DecisionResult {
     card,
     policy,
     cardSpentTotal,
+    successfulAuthorizationCount,
     grantRemaining,
     approvedApproval,
   } = context;
@@ -78,6 +82,14 @@ export function decide(context: DecisionContext): DecisionResult {
       decision: "decline",
       reason: "card_expired",
       ruleFired: "card_status_or_window",
+    };
+  }
+
+  if (policy.singleUse && successfulAuthorizationCount > 0) {
+    return {
+      decision: "decline",
+      reason: "single_use_consumed",
+      ruleFired: "single_use_limit",
     };
   }
 

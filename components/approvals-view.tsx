@@ -102,7 +102,7 @@ export function ApprovalsView({
     <>
       <PageHeader
         title="Approvals"
-        subtitle="Marcus’s mobile-friendly inbox. Pending rows poll in every two seconds and clear on tap."
+        subtitle="A mobile-friendly inbox for threshold exceptions and policy review."
         rightSlot={
           <div className="rounded-full border border-border bg-surface px-4 py-2 text-[12px] font-medium text-ink-muted">
             Live polling every 2 seconds
@@ -115,7 +115,7 @@ export function ApprovalsView({
           <StatCard
             label="Pending approvals"
             value={String(pending.length)}
-            hint="Each pending row is a real operator decision point in the demo flow."
+            hint="Each pending row is waiting on an operator decision."
             icon={Clock3}
             hero
           />
@@ -128,7 +128,7 @@ export function ApprovalsView({
           <StatCard
             label="Declined today"
             value={String(reviewed.filter((approval) => approval.status === "declined").length)}
-            hint="Declines stay visible so a judge can see the full operator trail."
+            hint="Declines stay visible so finance can review the full operator trail."
             icon={XCircle}
           />
         </div>
@@ -221,7 +221,7 @@ export function ApprovalsView({
         {reviewed.length > 0 ? (
           <div className="mt-6 rounded-[20px] border border-border bg-surface px-5 py-4">
             <p className="text-[13px] leading-6 text-ink-muted">
-              Reviewed rows stay visible so the demo can show the full operator trail. Approved requests are reusable once on retry, then marked consumed by the backend contract.
+              Reviewed rows stay visible so teams can audit the full operator trail. Approved requests are reusable once on retry, then marked consumed by the backend contract.
             </p>
           </div>
         ) : null}

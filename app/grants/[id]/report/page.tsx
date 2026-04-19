@@ -37,7 +37,7 @@ export default async function GrantReportPage({ params }: GrantReportPageProps) 
               <div className="flex size-8 items-center justify-center rounded-md bg-olive-700 text-sm font-bold text-white">
                 L
               </div>
-              <span className="text-[18px] font-semibold text-ink">Lumen</span>
+              <span className="text-[18px] font-semibold text-ink">Amanah</span>
             </div>
             <h1 className="text-[28px] font-semibold tracking-[-0.02em] text-ink">Funder Report</h1>
             <p className="text-[15px] text-ink-muted">{detail.grant.name}</p>
@@ -67,7 +67,10 @@ export default async function GrantReportPage({ params }: GrantReportPageProps) 
               ],
               ["Total budget", formatCurrency(detail.grant.totalAmount)],
             ].map(([label, value]) => (
-              <div key={label} className="flex items-center border-b border-border px-5 py-3 last:border-b-0">
+              <div
+                key={`${label}-${value}`}
+                className="flex items-center border-b border-border px-5 py-3 last:border-b-0"
+              >
                 <span className="w-40 shrink-0 text-[13px] text-ink-muted">{label}</span>
                 <span className="text-[14px] font-medium text-ink">{value}</span>
               </div>

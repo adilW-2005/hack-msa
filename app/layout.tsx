@@ -15,7 +15,7 @@ const jetBrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Lumen",
+  title: "Amanah",
   description: "Programmable spend operations for nonprofits.",
 };
 

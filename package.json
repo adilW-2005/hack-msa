@@ -2,7 +2,7 @@
   "name": "hack-msa",
   "version": "1.0.0",
   "private": true,
-  "description": "Lumen hackathon demo app",
+  "description": "Amanah hackathon demo app",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

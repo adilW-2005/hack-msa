@@ -20,6 +20,8 @@ import {
   createStripeVirtualCard,
   createTestHelperAuthorization,
   declineStripeAuthorization,
+  fromStripeMerchantCategory,
+  retrieveStripeCardDetails,
 } from "@/lib/stripe";
 
 function createId(prefix: string) {
@@ -43,8 +45,20 @@ function getMerchantName(merchantData: Record<string, unknown> | null | undefine
 }
 
 function getMerchantMcc(merchantData: Record<string, unknown> | null | undefined) {
+  const categoryCode = merchantData?.category_code;
+
+  if (categoryCode) {
+    return String(categoryCode);
+  }
+
+  const category = merchantData?.category;
+
+  if (category) {
+    return fromStripeMerchantCategory(String(category));
+  }
+
   return String(
-    merchantData?.category_code ?? merchantData?.category ?? "unknown_mcc",
+    "unknown_mcc",
   );
 }
 
@@ -67,6 +81,24 @@ async function getCardSpentTotal(cardId: string) {
     );
 
   return result?.value ?? 0;
+}
+
+async function getSuccessfulAuthorizationCount(cardId: string) {
+  const db = getDb();
+  const [result] = await db
+    .select({ count: sql<number>`count(*)`.mapWith(Number) })
+    .from(authorizations)
+    .where(
+      and(
+        eq(authorizations.cardId, cardId),
+        or(
+          eq(authorizations.decision, "approved"),
+          eq(authorizations.decision, "captured"),
+        ),
+      ),
+    );
+
+  return result?.count ?? 0;
 }
 
 async function getGrantSpentTotal(grantId: string) {
@@ -151,6 +183,7 @@ export async function issueCard(input: {
     policy: {
       mccAllow: policy.mccAllow,
       totalLimit: policy.totalLimit,
+      singleUse: policy.singleUse,
     },
   });
 
@@ -217,6 +250,33 @@ export async function triggerDemoSwipe(input: {
   });
 
   return { queued: true, result };
+}
+
+export async function revealCardDetails(cardId: string) {
+  const db = getDb();
+  const [card] = await db
+    .select({
+      id: cards.id,
+      stripeCardId: cards.stripeCardId,
+      last4: cards.last4,
+    })
+    .from(cards)
+    .where(eq(cards.id, cardId))
+    .limit(1);
+
+  if (!card) {
+    throw new Error(`Card ${cardId} was not found.`);
+  }
+
+  const details = await retrieveStripeCardDetails(card.stripeCardId);
+  const expYearSuffix = String(details.expYear).slice(-2).padStart(2, "0");
+
+  return {
+    number: details.number,
+    cvc: details.cvc,
+    expiry: `${String(details.expMonth).padStart(2, "0")}/${expYearSuffix}`,
+    last4: details.last4,
+  };
 }
 
 export async function listApprovals() {
@@ -341,6 +401,9 @@ async function handleAuthorizationRequest(
     merchant_data?: Record<string, unknown>;
   }).merchant_data;
   const cardSpentTotal = await getCardSpentTotal(cardRecord.card.id);
+  const successfulAuthorizationCount = await getSuccessfulAuthorizationCount(
+    cardRecord.card.id,
+  );
   const grantSpentTotal = await getGrantSpentTotal(cardRecord.grant.id);
   const reusableApproval = await getReusableApproval(cardRecord.card.id);
 
@@ -362,9 +425,11 @@ async function handleAuthorizationRequest(
       perTxnLimit: cardRecord.policy.perTxnLimit,
       totalLimit: cardRecord.policy.totalLimit,
       approvalThreshold: cardRecord.policy.approvalThreshold,
+      singleUse: cardRecord.policy.singleUse,
       windowDays: cardRecord.policy.windowDays,
     },
     cardSpentTotal,
+    successfulAuthorizationCount,
     grantRemaining: cardRecord.grant.totalAmount - grantSpentTotal,
     approvedApproval: reusableApproval
       ? {
@@ -478,7 +543,10 @@ async function handleTransactionCreated(transaction: Stripe.Issuing.Transaction)
 }
 
 export async function handleStripeEvent(event: Stripe.Event) {
-  if (event.type === "issuing_authorization.request") {
+  if (
+    event.type === "issuing_authorization.request" ||
+    event.type === "issuing_authorization.created"
+  ) {
     return handleAuthorizationRequest(
       event.data.object as Stripe.Issuing.Authorization,
     );

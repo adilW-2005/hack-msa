@@ -156,6 +156,10 @@ const MCC_LABELS: Record<string, string> = {
   "8099": "Health Services",
 };
 
+export const MCC_OPTIONS = Object.entries(MCC_LABELS)
+  .map(([code, label]) => ({ code, label }))
+  .sort((left, right) => left.code.localeCompare(right.code));
+
 export function mccLabel(code: string) {
   return MCC_LABELS[code] ?? `MCC ${code}`;
 }

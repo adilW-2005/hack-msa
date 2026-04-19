@@ -24,7 +24,7 @@ export function RoleSwitcher({
     <label className="flex flex-col gap-2">
       {!compact ? (
         <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-ink-muted">
-          Demo role
+          Active role
         </span>
       ) : null}
       <select
