@@ -1,10 +1,22 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { Inter, JetBrains_Mono } from "next/font/google";
+
 import "./globals.css";
 
+const inter = Inter({
+  variable: "--font-inter",
+  subsets: ["latin"],
+});
+
+const jetBrainsMono = JetBrains_Mono({
+  variable: "--font-mono",
+  subsets: ["latin"],
+});
+
 export const metadata: Metadata = {
-  title: "Lumen Hot Path",
-  description: "Backend control plane for the Lumen hackathon demo.",
+  title: "Lumen",
+  description: "Programmable spend operations for nonprofits.",
 };
 
 export default function RootLayout({
@@ -14,7 +26,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body className={`${inter.variable} ${jetBrainsMono.variable} antialiased`}>
+        {children}
+      </body>
     </html>
   );
 }
