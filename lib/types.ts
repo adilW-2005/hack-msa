@@ -1,5 +1,4 @@
 export type UserRole = "admin" | "finance" | "case_manager";
-
 export type DecisionStatus = "approved" | "declined" | "pending_approval";
 export type ApprovalStatus = "pending" | "approved" | "declined";
 export type CardholderType = "staff" | "client";
@@ -10,6 +9,7 @@ export type User = {
   role: UserRole;
   title: string;
   initials: string;
+  avatarInitials?: string;
 };
 
 export type Grant = {
@@ -43,6 +43,7 @@ export type Cardholder = {
   type: CardholderType;
   name: string;
   notes?: string;
+  stripeCardholderId?: string;
 };
 
 export type Card = {
@@ -50,13 +51,14 @@ export type Card = {
   policyId: string;
   cardholderId: string;
   issuedByUserId: string;
-  status: "active" | "inactive";
+  status: "active" | "inactive" | "canceled";
   issuedAt: string;
   last4: string;
-  cardNumber: string;
-  expiry: string;
-  cvc: string;
+  cardNumber?: string;
+  expiry?: string;
+  cvc?: string;
   notes?: string;
+  stripeCardId?: string;
 };
 
 export type Authorization = {
@@ -70,19 +72,20 @@ export type Authorization = {
   ruleFired: string;
   approvalId: string | null;
   decidedAt: string;
+  stripeAuthId?: string | null;
 };
 
 export type Approval = {
   id: string;
-  authorizationId: string;
+  authorizationId: string | null;
   cardId: string;
   approverUserId: string;
-  amount: number;
-  merchantName: string;
   status: ApprovalStatus;
   requestedAt: string;
   resolvedAt: string | null;
   consumedAt: string | null;
+  amount?: number;
+  merchantName?: string;
 };
 
 export type SwipeRequest = {
@@ -97,7 +100,7 @@ export type CardSummary = {
   cardholderName: string;
   policyName: string;
   last4: string;
-  status: Card["status"];
+  status: "active" | "inactive";
   issuedAt: string;
   spentAmount: number;
   limitAmount: number;

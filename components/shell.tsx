@@ -6,6 +6,8 @@ import {
   Bell,
   CheckCircle2,
   CreditCard,
+  History,
+  LayoutDashboard,
   Landmark,
   ScrollText,
   Zap,
@@ -22,7 +24,23 @@ type ShellProps = {
   pendingApprovals: number;
 };
 
-const navItems = [
+type NavItem = {
+  href: string;
+  label: string;
+  icon: typeof Zap;
+  roles: User["role"][];
+  section: string;
+  disabled?: boolean;
+};
+
+const navItems: NavItem[] = [
+  {
+    href: "/dashboard",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    roles: ["admin", "finance", "case_manager"] as User["role"][],
+    section: "Overview",
+  },
   {
     href: "/policies",
     label: "Policy Studio",
@@ -52,12 +70,18 @@ const navItems = [
     section: "Oversight",
   },
   {
-    href: "#",
+    href: "/grants",
     label: "Grants",
     icon: Landmark,
     roles: ["admin", "finance"] as User["role"][],
     section: "Oversight",
-    disabled: true,
+  },
+  {
+    href: "/audit",
+    label: "Audit",
+    icon: History,
+    roles: ["admin", "finance"] as User["role"][],
+    section: "Oversight",
   },
 ];
 
@@ -157,7 +181,11 @@ export function Shell({
                       href={item.href}
                       label={item.label}
                       icon={item.icon}
-                      active={!item.disabled && pathname === item.href}
+                      active={
+                        !item.disabled &&
+                        (pathname === item.href ||
+                          (item.href !== "/dashboard" && pathname.startsWith(item.href)))
+                      }
                       disabled={item.disabled}
                     />
                   ))}
@@ -207,7 +235,9 @@ export function Shell({
                 )
                 .map((item) => {
                   const Icon = item.icon;
-                  const active = pathname === item.href;
+                  const active =
+                    pathname === item.href ||
+                    (item.href !== "/dashboard" && pathname.startsWith(item.href));
                   return (
                     <Link
                       key={item.href}

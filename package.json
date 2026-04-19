@@ -2,6 +2,7 @@
   "name": "hack-msa",
   "version": "1.0.0",
   "private": true,
+  "description": "Lumen hackathon demo app",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -23,7 +24,6 @@
     "url": "https://github.com/adilW-2005/hack-msa/issues"
   },
   "homepage": "https://github.com/adilW-2005/hack-msa#readme",
-  "description": "Lumen hackathon demo app",
   "dependencies": {
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
@@ -33,6 +33,7 @@
     "postgres": "^3.4.9",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
+    "recharts": "^3.8.1",
     "stripe": "^22.0.2",
     "tailwind-merge": "^3.3.1",
     "zod": "^4.3.6"
